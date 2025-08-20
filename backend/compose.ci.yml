@@ -1,7 +1,7 @@
 services:
   # Override the runner service in compose.yml to use the CI environment variables
   # to run tests
-  server:
+  control_plane:
     environment:
       - CONTROL_PLANE_OPENAI_API_KEY=${CONTROL_PLANE_OPENAI_API_KEY?}
       - CLI_OPENAI_API_KEY=${CLI_OPENAI_API_KEY?}
