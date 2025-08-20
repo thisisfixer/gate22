@@ -57,7 +57,7 @@ jobs:
     # Only apply environment protection (requires approval) for fork PRs
     environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'CICD_FOR_FORKED_REPO' || null }}
     env:
-      SERVER_OPENAI_API_KEY: ${{ secrets.SERVER_OPENAI_API_KEY }}
+      CONTROL_PLANE_OPENAI_API_KEY: ${{ secrets.CONTROL_PLANE_OPENAI_API_KEY }}
       CLI_OPENAI_API_KEY: ${{ secrets.CLI_OPENAI_API_KEY }}
 
     steps:
