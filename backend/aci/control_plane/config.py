@@ -15,16 +15,21 @@ ROUTER_PREFIX_AUTH = "/v1/auth"
 ROUTER_PREFIX_ORGANIZATIONS = "/v1/organizations"
 ROUTER_PREFIX_USERS = "/v1/users"
 
+# Frontend
+FRONTEND_URL = check_and_get_env_variable("CONTROL_PLANE_FRONTEND_URL")
+
 # Authentication
-# GOOGLE_CLIENT_ID = check_and_get_env_variable("CONTROL_PLANE_GOOGLE_CLIENT_ID")
-# GOOGLE_CLIENT_SECRET = check_and_get_env_variable("CONTROL_PLANE_GOOGLE_CLIENT_SECRET")
+GOOGLE_CLIENT_ID = check_and_get_env_variable("CONTROL_PLANE_GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = check_and_get_env_variable("CONTROL_PLANE_GOOGLE_CLIENT_SECRET")
+GOOGLE_OAUTH_REDIRECT_URI_BASE = check_and_get_env_variable(
+    "CONTROL_PLANE_GOOGLE_OAUTH_REDIRECT_URI_BASE"
+)
 SESSION_SECRET_KEY = check_and_get_env_variable("CONTROL_PLANE_SESSION_SECRET_KEY")
+REFRESH_TOKEN_KEY = check_and_get_env_variable("CONTROL_PLANE_REFRESH_TOKEN_KEY")
 JWT_SIGNING_KEY = check_and_get_env_variable("CONTROL_PLANE_JWT_SIGNING_KEY")
 JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
-# Frontend
-FRONTEND_URL = check_and_get_env_variable("CONTROL_PLANE_FRONTEND_URL")
 
 # DB CONFIG
 DB_SCHEME = check_and_get_env_variable("CONTROL_PLANE_DB_SCHEME")
