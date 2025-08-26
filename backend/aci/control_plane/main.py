@@ -13,7 +13,14 @@ from aci.control_plane.middleware.interceptor import (
     InterceptorMiddleware,
     RequestContextFilter,
 )
-from aci.control_plane.routes import auth, health, organizations, users
+from aci.control_plane.routes import (
+    auth,
+    health,
+    mcp_server_configurations,
+    mcp_servers,
+    organizations,
+    users,
+)
 
 setup_logging(
     formatter=JsonFormatter(
@@ -84,4 +91,16 @@ app.include_router(
     organizations.router,
     prefix=config.ROUTER_PREFIX_ORGANIZATIONS,
     tags=[config.ROUTER_PREFIX_ORGANIZATIONS.split("/")[-1]],
+)
+
+app.include_router(
+    mcp_servers.router,
+    prefix=config.ROUTER_PREFIX_MCP_SERVERS,
+    tags=[config.ROUTER_PREFIX_MCP_SERVERS.split("/")[-1]],
+)
+
+app.include_router(
+    mcp_server_configurations.router,
+    prefix=config.ROUTER_PREFIX_MCP_SERVER_CONFIGURATIONS,
+    tags=[config.ROUTER_PREFIX_MCP_SERVER_CONFIGURATIONS.split("/")[-1]],
 )
