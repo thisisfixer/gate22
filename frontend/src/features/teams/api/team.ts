@@ -1,9 +1,4 @@
-import {
-  Team,
-  TeamMember,
-  CreateTeamRequest,
-  InviteTeamMemberRequest,
-} from "../types/team.types";
+import { Team, TeamMember, CreateTeamRequest } from "../types/team.types";
 import { getApiBaseUrl } from "@/lib/api-client";
 
 export async function listTeams(
@@ -11,10 +6,9 @@ export async function listTeams(
   orgId: string,
 ): Promise<Team[]> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/teams`, {
+  const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/teams`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
     },
   });
 
@@ -31,12 +25,14 @@ export async function getTeam(
   teamId: string,
 ): Promise<Team> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/teams/${teamId}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
+  const response = await fetch(
+    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error("Failed to fetch team");
@@ -51,11 +47,10 @@ export async function createTeam(
   data: CreateTeamRequest,
 ): Promise<Team> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/teams`, {
+  const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/teams`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
@@ -74,13 +69,15 @@ export async function deleteTeam(
   teamId: string,
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/teams/${teamId}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
+  const response = await fetch(
+    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error("Failed to delete team");
@@ -93,12 +90,14 @@ export async function listTeamMembers(
   teamId: string,
 ): Promise<TeamMember[]> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/teams/${teamId}/members`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
+  const response = await fetch(
+    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}/members`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error("Failed to fetch team members");
@@ -107,25 +106,25 @@ export async function listTeamMembers(
   return response.json();
 }
 
-export async function inviteTeamMember(
+export async function addTeamMember(
   accessToken: string,
   orgId: string,
   teamId: string,
-  data: InviteTeamMemberRequest,
+  userId: string,
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/teams/${teamId}/invite`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}/members/${userId}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-    body: JSON.stringify(data),
-  });
+  );
 
   if (!response.ok) {
-    throw new Error("Failed to invite team member");
+    throw new Error("Failed to add team member");
   }
 }
 
@@ -137,12 +136,11 @@ export async function removeTeamMember(
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/teams/${teamId}/members/${userId}`,
+    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}/members/${userId}`,
     {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        "X-ACI-ORG-ID": orgId,
       },
     },
   );

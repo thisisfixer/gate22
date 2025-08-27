@@ -4,13 +4,12 @@ import { useEffect, useState, useMemo } from "react";
 import { OrganizationUser } from "@/features/settings/types/organization.types";
 import {
   listOrganizationUsers,
-  removeUser,
+  // removeUser, // Kept for potential future use
 } from "@/features/settings/api/organization";
 import { useMetaInfo } from "@/components/context/metainfo";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation"; // Kept for potential future use with handleRemove
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,14 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Search } from "lucide-react";
 
 interface VercelMembersTableProps {
   refreshKey?: number;
@@ -35,13 +27,12 @@ interface VercelMembersTableProps {
 export function VercelMembersTable({
   refreshKey = 0,
 }: VercelMembersTableProps) {
-  const { accessToken, activeOrg, user } = useMetaInfo();
-  const router = useRouter();
+  const { accessToken, activeOrg } = useMetaInfo();
+  // const router = useRouter(); // Kept for potential future use with handleRemove
   const [members, setMembers] = useState<OrganizationUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
   const fetchMembers = useMemo(
     () => async () => {
@@ -62,49 +53,44 @@ export function VercelMembersTable({
     fetchMembers();
   }, [fetchMembers, refreshKey]);
 
-  const handleRemove = async (userId: string) => {
-    try {
-      await removeUser(accessToken, activeOrg.orgId, userId);
-      toast.success("Member removed successfully");
-      fetchMembers();
+  // Note: handleRemove is kept for potential future use
+  // const handleRemove = async (userId: string) => {
+  //   try {
+  //     await removeUser(accessToken, activeOrg.orgId, userId);
+  //     toast.success("Member removed successfully");
+  //     fetchMembers();
 
-      if (userId === user?.userId) {
-        router.push("/mcp-servers");
-      }
-    } catch {
-      toast.error("Failed to remove member");
-    }
-  };
+  //     if (userId === user?.userId) {
+  //       router.push("/mcp-servers");
+  //     }
+  //   } catch {
+  //     toast.error("Failed to remove member");
+  //   }
+  // };
 
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
       if (!member) return false;
       const fullName =
-        `${member.first_name || ""} ${member.last_name || ""}`.trim();
+        `${member.first_name || ""} ${member.last_name || ""}`.trim() ||
+        member.name ||
+        "";
       const matchesSearch =
         fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         member.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         member.user_id?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRole = roleFilter === "all" || member.role === roleFilter;
+
+      // Map backend roles to frontend display
+      const displayRole =
+        member.role === "admin"
+          ? "Admin"
+          : member.role === "member"
+            ? "Member"
+            : member.role;
+      const matchesRole = roleFilter === "all" || displayRole === roleFilter;
       return matchesSearch && matchesRole;
     });
   }, [members, searchQuery, roleFilter]);
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedMembers(filteredMembers.map((m) => m.user_id));
-    } else {
-      setSelectedMembers([]);
-    }
-  };
-
-  const handleSelectMember = (userId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedMembers([...selectedMembers, userId]);
-    } else {
-      setSelectedMembers(selectedMembers.filter((id) => id !== userId));
-    }
-  };
 
   const getInitials = (
     firstName?: string,
@@ -166,34 +152,18 @@ export function VercelMembersTable({
             <SelectItem value="all">All Team Roles</SelectItem>
             <SelectItem value="Admin">Admin</SelectItem>
             <SelectItem value="Member">Member</SelectItem>
-            <SelectItem value="Owner">Owner</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div className="border rounded-lg">
-        <div className="p-4 border-b bg-muted/50">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={
-                selectedMembers.length === filteredMembers.length &&
-                filteredMembers.length > 0
-              }
-              onCheckedChange={handleSelectAll}
-            />
-            <span className="text-sm text-muted-foreground">
-              Select all ({filteredMembers.length})
-            </span>
-          </div>
-        </div>
-
         <div className="divide-y">
           {filteredMembers.map((member, index) => {
             if (!member) return null;
             const displayName =
               member.first_name && member.last_name
                 ? `${member.first_name} ${member.last_name}`
-                : member.first_name || member.user_id;
+                : member.name || member.first_name || member.user_id;
 
             return (
               <div
@@ -201,12 +171,6 @@ export function VercelMembersTable({
                 className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-center gap-4">
-                  <Checkbox
-                    checked={selectedMembers.includes(member.user_id)}
-                    onCheckedChange={(checked) =>
-                      handleSelectMember(member.user_id, checked as boolean)
-                    }
-                  />
                   <Avatar className="h-10 w-10">
                     <AvatarFallback
                       className={`${getAvatarColor(member.user_id)} text-white`}
@@ -228,34 +192,12 @@ export function VercelMembersTable({
 
                 <div className="flex items-center gap-4">
                   <span className="text-sm text-muted-foreground">
-                    {member.role}
+                    {member.role === "admin"
+                      ? "Admin"
+                      : member.role === "member"
+                        ? "Member"
+                        : member.role}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-foreground"
-                    disabled={member.role === "Owner"}
-                  >
-                    Manage Access
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => handleRemove(member.user_id)}
-                        className="text-destructive"
-                        disabled={member.role === "Owner"}
-                      >
-                        {member.user_id === user?.userId
-                          ? "Leave Organization"
-                          : "Remove Member"}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
             );
