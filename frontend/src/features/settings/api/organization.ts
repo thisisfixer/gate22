@@ -9,7 +9,6 @@ export async function listOrganizationUsers(
   const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/members`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "X-ACI-ORG-ID": orgId,
     },
   });
 
