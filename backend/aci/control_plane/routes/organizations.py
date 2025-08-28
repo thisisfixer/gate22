@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from aci.common.db import crud
 from aci.common.enums import OrganizationRole
 from aci.common.logging_setup import get_logger
-from aci.common.schemas.auth import ActAsInfo
 from aci.common.schemas.organization import (
     CreateOrganizationRequest,
     CreateOrganizationTeamRequest,
@@ -17,29 +16,10 @@ from aci.common.schemas.organization import (
     UpdateOrganizationMemberRoleRequest,
 )
 from aci.control_plane import dependencies as deps
+from aci.control_plane.rbac import check_permission
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-
-def _throw_if_not_permitted(
-    act_as: ActAsInfo,
-    requested_organization_id: UUID | None = None,
-    required_role: OrganizationRole = OrganizationRole.MEMBER,
-) -> None:
-    """
-    This function throws an HTTPException if the user is not permitted to act as the requested
-    organization and role.
-    """
-    if requested_organization_id and act_as.organization_id != requested_organization_id:
-        logger.error(
-            f"ActAs organization_id {act_as.organization_id} does not match the requested"
-            f"organization_id {requested_organization_id}"
-        )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
-    if required_role == OrganizationRole.ADMIN and act_as.role != OrganizationRole.ADMIN:
-        logger.error(f"ActAs role {act_as.role} is not authorized. Required role: {required_role}")
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
 
 @router.post("", response_model=OrganizationInfo, status_code=status.HTTP_201_CREATED)
@@ -96,7 +76,7 @@ async def list_organization_members(
     organization_id: UUID,
 ) -> list[OrganizationMembershipInfo]:
     # Check user's role permission
-    _throw_if_not_permitted(context.act_as, requested_organization_id=organization_id)
+    check_permission(context.act_as, requested_organization_id=organization_id)
 
     # Get organization members
     organization_members = crud.organizations.get_organization_members(
@@ -122,7 +102,7 @@ async def remove_organization_member(
     user_id: UUID,
 ) -> None:
     # Check user's role permission
-    _throw_if_not_permitted(context.act_as, requested_organization_id=organization_id)
+    check_permission(context.act_as, requested_organization_id=organization_id)
 
     # Admin can remove anyone in the organization
     if context.act_as.role == OrganizationRole.ADMIN:
@@ -167,7 +147,7 @@ async def update_organization_member_role(
     request: UpdateOrganizationMemberRoleRequest,
 ) -> None:
     # Check user's role permission
-    _throw_if_not_permitted(
+    check_permission(
         context.act_as,
         requested_organization_id=organization_id,
         required_role=OrganizationRole.ADMIN,
@@ -214,7 +194,7 @@ async def create_team(
     request: CreateOrganizationTeamRequest,
 ) -> TeamInfo:
     # Check user's role permission
-    _throw_if_not_permitted(
+    check_permission(
         context.act_as,
         requested_organization_id=organization_id,
         required_role=OrganizationRole.ADMIN,
@@ -256,7 +236,7 @@ async def list_teams(
     organization_id: UUID,
 ) -> list[TeamInfo]:
     # Check user's role permission
-    _throw_if_not_permitted(context.act_as, requested_organization_id=organization_id)
+    check_permission(context.act_as, requested_organization_id=organization_id)
 
     # Get organization teams
     teams = crud.teams.get_teams_by_organization_id(
@@ -285,7 +265,7 @@ async def list_team_members(
     team_id: UUID,
 ) -> list[TeamMembershipInfo]:
     # Check user's role permission
-    _throw_if_not_permitted(context.act_as, requested_organization_id=organization_id)
+    check_permission(context.act_as, requested_organization_id=organization_id)
 
     # Get team members
     team_members = crud.teams.get_team_members(
@@ -312,7 +292,7 @@ async def add_team_member(
     user_id: UUID,
 ) -> None:
     # Check user's role permission
-    _throw_if_not_permitted(
+    check_permission(
         context.act_as,
         requested_organization_id=organization_id,
         required_role=OrganizationRole.ADMIN,
@@ -360,7 +340,7 @@ async def remove_team_member(
     user_id: UUID,
 ) -> None:
     # Check user's role permission
-    _throw_if_not_permitted(context.act_as, requested_organization_id=organization_id)
+    check_permission(context.act_as, requested_organization_id=organization_id)
 
     # Admin can remove anyone in the team
     if context.act_as.role == OrganizationRole.ADMIN:
