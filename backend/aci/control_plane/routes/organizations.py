@@ -32,12 +32,17 @@ def _throw_if_not_permitted(
     organization and role.
     """
     if requested_organization_id and act_as.organization_id != requested_organization_id:
+        logger.error(
+            f"ActAs organization_id {act_as.organization_id} does not match the requested"
+            f"organization_id {requested_organization_id}"
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     if required_role == OrganizationRole.ADMIN and act_as.role != OrganizationRole.ADMIN:
+        logger.error(f"ActAs role {act_as.role} is not authorized. Required role: {required_role}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
 
-@router.post("/", response_model=OrganizationInfo, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrganizationInfo, status_code=status.HTTP_201_CREATED)
 async def create_organization(
     context: Annotated[deps.RequestContextWithoutActAs, Depends(deps.get_request_context_no_orgs)],
     request: CreateOrganizationRequest,
@@ -46,6 +51,7 @@ async def create_organization(
 
     # Check if organization name already been used
     if crud.organizations.get_organization_by_name(context.db_session, request.name):
+        logger.error(f"Organization name {request.name} already been used")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organization name already been used",
@@ -129,15 +135,18 @@ async def remove_organization_member(
             filter(lambda member: member.role == OrganizationRole.ADMIN, organization_members)
         )
         if len(admins) == 1 and admins[0].user_id == user_id:
+            logger.error(f"Cannot remove the last admin in the organization {organization_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot remove the last admin in the organization",
             )
     # Member can only remove themselves
     elif context.act_as.role == OrganizationRole.MEMBER:
-        if context.user_id != str(user_id):
+        if context.user_id != user_id:
+            logger.error("Non-admin cannot remove other members from the organization")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Cannot remove other members"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Non-admin cannot remove other members from the organization",
             )
 
     # All checks pass. Now remove member
@@ -174,6 +183,7 @@ async def update_organization_member_role(
     )
     # If the targeted user is last admin, and the request is to remove the admin role, raise error
     if len(admins) == 1 and admins[0].user_id == user_id and request.role != OrganizationRole.ADMIN:
+        logger.error(f"Cannot downgrade the last admin in the organization {organization_id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot downgrade the last admin in the organization",
@@ -214,6 +224,7 @@ async def create_team(
     if crud.teams.get_team_by_organization_id_and_name(
         context.db_session, organization_id, request.name
     ):
+        logger.error(f"Team name {request.name} already exists in organization {organization_id}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Team name already exists",
@@ -308,16 +319,22 @@ async def add_team_member(
     )
 
     # Check if user is a member of the organization
-    if not crud.organizations.is_user_in_organization(context.db_session, organization_id, user_id):
+    if not crud.organizations.get_organization_membership(
+        context.db_session, organization_id, user_id
+    ):
+        logger.error(f"User {user_id} is not a member of the organization {organization_id}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not a member of the organization",
         )
 
     # Check if targeted user is already a member of the team
-    if crud.teams.get_team_members(context.db_session, team_id):
+    team_members = crud.teams.get_team_members(context.db_session, team_id)
+    if any(member.user_id == user_id for member in team_members):
+        logger.error(f"User {user_id} already a member of the team {team_id}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="User already a member of the team"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already a member of the team",
         )
 
     # Add team member
@@ -354,13 +371,15 @@ async def remove_team_member(
     elif context.act_as.role == OrganizationRole.MEMBER:
         if context.user_id != user_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Cannot remove other members"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Non-admin cannot remove other members from team",
             )
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
     # Check if targeted user is a member of the team
-    if not crud.teams.get_team_members(context.db_session, team_id):
+    team_members = crud.teams.get_team_members(context.db_session, team_id)
+    if not any(member.user_id == user_id for member in team_members):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User is not a member of the team"
         )
