@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session
 from aci.common.db import crud
 from aci.common.db.sql_models import (
     Base,
+    ConnectedAccount,
     MCPServer,
     MCPServerConfiguration,
     Organization,
     Team,
     User,
 )
-from aci.common.enums import AuthType, OrganizationRole, UserIdentityProvider
+from aci.common.enums import OrganizationRole, UserIdentityProvider
 from aci.common.logging_setup import get_logger
 from aci.common.schemas.auth import ActAsInfo
 from aci.common.schemas.mcp_server_configuration import MCPServerConfigurationCreate
@@ -32,6 +33,7 @@ logger = get_logger(__name__)
 # to generate embeddings using OpenAI for each app and function
 dummy_mcp_servers_to_be_inserted = helper.prepare_mcp_servers()
 DUMMY_MCP_SERVER_NAME_NOTION = "NOTION"
+DUMMY_MCP_SERVER_NAME_GITHUB = "GITHUB"
 
 
 @pytest.fixture(scope="function")
@@ -136,6 +138,8 @@ def dummy_access_token_another_org(db_session: Session) -> str:
 # - dummy_admin (added to the dummy_organization as admin)
 # - dummy_member (added to the dummy_organization as member)
 # ------------------------------------------------------------
+
+
 @pytest.fixture(scope="function")
 def dummy_organization(db_session: Session, database_setup_and_cleanup: None) -> Organization:
     dummy_organization = crud.organizations.create_organization(
@@ -201,6 +205,27 @@ def dummy_member(db_session: Session, dummy_organization: Organization) -> User:
 
 
 @pytest.fixture(scope="function")
+def dummy_another_org_member(db_session: Session, dummy_organization: Organization) -> User:
+    """
+    This will add another member into dummy_organization.
+    """
+    dummy_another_user = crud.users.create_user(
+        db_session=db_session,
+        name="Dummy Another User",
+        email="dummy_another@example.com",
+        password_hash=None,
+        identity_provider=UserIdentityProvider.EMAIL,
+    )
+    crud.organizations.add_user_to_organization(
+        db_session=db_session,
+        organization_id=dummy_organization.id,
+        user_id=dummy_another_user.id,
+        role=OrganizationRole.MEMBER,
+    )
+    return dummy_another_user
+
+
+@pytest.fixture(scope="function")
 def dummy_team(dummy_organization: Organization) -> Team:
     return dummy_organization.teams[0]
 
@@ -258,6 +283,17 @@ def dummy_mcp_server_notion(dummy_mcp_servers: list[MCPServer]) -> MCPServer:
 
 
 @pytest.fixture(scope="function")
+def dummy_mcp_server_github(dummy_mcp_servers: list[MCPServer]) -> MCPServer:
+    dummy_mcp_server_notion = next(
+        dummy_mcp_server
+        for dummy_mcp_server in dummy_mcp_servers
+        if dummy_mcp_server.name == DUMMY_MCP_SERVER_NAME_GITHUB
+    )
+    assert dummy_mcp_server_notion is not None
+    return dummy_mcp_server_notion
+
+
+@pytest.fixture(scope="function")
 def dummy_mcp_server(dummy_mcp_server_notion: MCPServer) -> MCPServer:
     """
     alias for dummy_mcp_server_notion
@@ -265,28 +301,128 @@ def dummy_mcp_server(dummy_mcp_server_notion: MCPServer) -> MCPServer:
     return dummy_mcp_server_notion
 
 
+# ------------------------------------------------------------
+#
+# Dummy MCP Servers Configurations
+#
+# ------------------------------------------------------------
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_server_configurations(
+    db_session: Session,
+    dummy_organization: Organization,
+    dummy_mcp_servers: list[MCPServer],
+) -> list[MCPServerConfiguration]:
+    dummy_mcp_server_configurations = []
+    for dummy_mcp_server in dummy_mcp_servers:
+        dummy_mcp_server_configuration = (
+            crud.mcp_server_configurations.create_mcp_server_configuration(
+                db_session=db_session,
+                organization_id=dummy_organization.id,
+                mcp_server_configuration=MCPServerConfigurationCreate(
+                    mcp_server_id=dummy_mcp_server.id,
+                    auth_type=dummy_mcp_server.auth_configs[0]["type"],
+                    all_tools_enabled=True,
+                    enabled_tools=[],
+                    allowed_teams=[],
+                ),
+            )
+        )
+        dummy_mcp_server_configurations.append(dummy_mcp_server_configuration)
+    return dummy_mcp_server_configurations
+
+
 @pytest.fixture(scope="function")
 def dummy_mcp_server_configuration(
-    db_session: Session,
+    dummy_mcp_server_configuration_notion: MCPServerConfiguration,
+) -> MCPServerConfiguration:
+    """
+    alias for dummy_mcp_server_configuration_notion
+    """
+    return dummy_mcp_server_configuration_notion
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_server_configuration_notion(
+    dummy_mcp_server_configurations: list[MCPServerConfiguration],
     dummy_mcp_server_notion: MCPServer,
-    dummy_organization: Organization,
-    dummy_team: Team,
 ) -> MCPServerConfiguration:
     """
     A dummy MCP server configuration under dummy_organization, allowed [dummy_team]
     """
-    mcp_server_configuration = crud.mcp_server_configurations.create_mcp_server_configuration(
-        db_session=db_session,
-        organization_id=dummy_organization.id,
-        mcp_server_configuration=MCPServerConfigurationCreate(
-            mcp_server_id=dummy_mcp_server_notion.id,
-            auth_type=AuthType.OAUTH2,
-            all_tools_enabled=True,
-            enabled_tools=[],
-            allowed_teams=[dummy_team.id],
-        ),
+    dummy_mcp_server_configuration = next(
+        dummy_mcp_server_configuration
+        for dummy_mcp_server_configuration in dummy_mcp_server_configurations
+        if dummy_mcp_server_configuration.mcp_server_id == dummy_mcp_server_notion.id
     )
-    return mcp_server_configuration
+    assert dummy_mcp_server_configuration is not None
+    return dummy_mcp_server_configuration
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_server_configuration_github(
+    dummy_mcp_server_configurations: list[MCPServerConfiguration],
+    dummy_mcp_server_github: MCPServer,
+) -> MCPServerConfiguration:
+    dummy_mcp_server_configuration = next(
+        dummy_mcp_server_configuration
+        for dummy_mcp_server_configuration in dummy_mcp_server_configurations
+        if dummy_mcp_server_configuration.mcp_server_id == dummy_mcp_server_github.id
+    )
+    assert dummy_mcp_server_configuration is not None
+    return dummy_mcp_server_configuration
+
+
+# ------------------------------------------------------------
+#
+# Dummy Connected Accounts
+#
+# ------------------------------------------------------------
+
+
+@pytest.fixture(scope="function")
+def dummy_connected_accounts(
+    db_session: Session,
+    dummy_user: User,
+    dummy_another_org_member: User,
+    dummy_mcp_server_configuration_github: MCPServerConfiguration,
+    dummy_mcp_server_configuration_notion: MCPServerConfiguration,
+) -> list[ConnectedAccount]:
+    """
+    Test settings:
+    - dummy_user connected to dummy_mcp_server_configuration_github
+    - dummy_user connected to dummy_mcp_server_configuration_notion
+    - dummy_another_org_member connected to dummy_mcp_server_configuration_github
+    """
+
+    connected_accounts = []
+
+    connected_accounts.append(
+        crud.connected_accounts.create_connected_account(
+            db_session=db_session,
+            user_id=dummy_user.id,
+            mcp_server_configuration_id=dummy_mcp_server_configuration_github.id,
+            auth_credentials={},
+        )
+    )
+    connected_accounts.append(
+        crud.connected_accounts.create_connected_account(
+            db_session=db_session,
+            user_id=dummy_user.id,
+            mcp_server_configuration_id=dummy_mcp_server_configuration_notion.id,
+            auth_credentials={},
+        )
+    )
+    connected_accounts.append(
+        crud.connected_accounts.create_connected_account(
+            db_session=db_session,
+            user_id=dummy_another_org_member.id,
+            mcp_server_configuration_id=dummy_mcp_server_configuration_github.id,
+            auth_credentials={},
+        )
+    )
+    return connected_accounts
 
 
 # ------------------------------------------------------------
