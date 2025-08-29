@@ -94,3 +94,19 @@ def update_mcp_server(
     db_session.flush()
     db_session.refresh(mcp_server)
     return mcp_server
+
+
+def list_mcp_servers(
+    db_session: Session,
+    offset: int | None = None,
+    limit: int | None = None,
+) -> list[MCPServer]:
+    statement = select(MCPServer).order_by(MCPServer.name.asc())
+
+    if offset is not None:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+
+    servers = list(db_session.execute(statement).scalars().all())
+    return servers

@@ -7,16 +7,31 @@ from sqlalchemy import Inspector, inspect
 from sqlalchemy.orm import Session
 
 from aci.common.db import crud
-from aci.common.db.sql_models import Base, Organization, Team, User
-from aci.common.enums import OrganizationRole, UserIdentityProvider
+from aci.common.db.sql_models import (
+    Base,
+    MCPServer,
+    MCPServerConfiguration,
+    Organization,
+    Team,
+    User,
+)
+from aci.common.enums import AuthType, OrganizationRole, UserIdentityProvider
 from aci.common.logging_setup import get_logger
 from aci.common.schemas.auth import ActAsInfo
+from aci.common.schemas.mcp_server_configuration import MCPServerConfigurationCreate
 from aci.common.test_utils import clear_database, create_test_db_session
 from aci.control_plane import dependencies as deps
 from aci.control_plane.main import app as fastapi_app
 from aci.control_plane.routes.auth import _sign_token
+from aci.control_plane.tests import helper
 
 logger = get_logger(__name__)
+
+
+# call this one time for entire tests because it's slow and costs money (negligible) as it needs
+# to generate embeddings using OpenAI for each app and function
+dummy_mcp_servers_to_be_inserted = helper.prepare_mcp_servers()
+DUMMY_MCP_SERVER_NAME_NOTION = "NOTION"
 
 
 @pytest.fixture(scope="function")
@@ -34,7 +49,7 @@ def test_client(db_session: Session) -> Generator[TestClient, None, None]:
 # - dummy_access_token_admin_act_as_member
 # - dummy_access_token_member
 # - dummy_access_token_no_orgs (without act as)
-# - dummy_access_token_non_member (act as other organization)
+# - dummy_access_token_another_org (act as other organization)
 # ------------------------------------------------------------
 @pytest.fixture(scope="function")
 def dummy_access_token_admin(dummy_admin: User) -> str:
@@ -81,7 +96,7 @@ def dummy_access_token_no_orgs(dummy_user_without_org: User) -> str:
 
 
 @pytest.fixture(scope="function")
-def dummy_access_token_non_member(db_session: Session) -> str:
+def dummy_access_token_another_org(db_session: Session) -> str:
     """
     Access token of a user acted as other organization. This user has no membership in
     `dummy_organization`.
@@ -200,6 +215,78 @@ def dummy_user_without_org(db_session: Session) -> User:
         identity_provider=UserIdentityProvider.EMAIL,
     )
     return user
+
+
+# ------------------------------------------------------------
+#
+# Dummy MCP Servers
+#
+# ------------------------------------------------------------
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_servers(db_session: Session) -> list[MCPServer]:
+    dummy_mcp_servers = []
+    for (
+        mcp_server_upsert,
+        tools_upsert,
+        embedding,
+        mcp_tool_embeddings,
+    ) in dummy_mcp_servers_to_be_inserted:
+        mcp_server = crud.mcp_servers.create_mcp_server(
+            db_session=db_session, mcp_server_upsert=mcp_server_upsert, embedding=embedding
+        )
+        crud.mcp_tools.create_mcp_tools(
+            db_session=db_session,
+            mcp_tool_upserts=tools_upsert,
+            mcp_tool_embeddings=mcp_tool_embeddings,
+        )
+        dummy_mcp_servers.append(mcp_server)
+        db_session.commit()
+    return dummy_mcp_servers
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_server_notion(dummy_mcp_servers: list[MCPServer]) -> MCPServer:
+    dummy_mcp_server_notion = next(
+        dummy_mcp_server
+        for dummy_mcp_server in dummy_mcp_servers
+        if dummy_mcp_server.name == DUMMY_MCP_SERVER_NAME_NOTION
+    )
+    assert dummy_mcp_server_notion is not None
+    return dummy_mcp_server_notion
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_server(dummy_mcp_server_notion: MCPServer) -> MCPServer:
+    """
+    alias for dummy_mcp_server_notion
+    """
+    return dummy_mcp_server_notion
+
+
+@pytest.fixture(scope="function")
+def dummy_mcp_server_configuration(
+    db_session: Session,
+    dummy_mcp_server_notion: MCPServer,
+    dummy_organization: Organization,
+    dummy_team: Team,
+) -> MCPServerConfiguration:
+    """
+    A dummy MCP server configuration under dummy_organization, allowed [dummy_team]
+    """
+    mcp_server_configuration = crud.mcp_server_configurations.create_mcp_server_configuration(
+        db_session=db_session,
+        organization_id=dummy_organization.id,
+        mcp_server_configuration=MCPServerConfigurationCreate(
+            mcp_server_id=dummy_mcp_server_notion.id,
+            auth_type=AuthType.OAUTH2,
+            all_tools_enabled=True,
+            enabled_tools=[],
+            allowed_teams=[dummy_team.id],
+        ),
+    )
+    return mcp_server_configuration
 
 
 # ------------------------------------------------------------
