@@ -131,24 +131,13 @@ async def get_mcp_server_configuration(
     elif context.act_as.role == OrganizationRole.MEMBER:
         # If user is member, check if the MCP server configuration's allowed teams contains the
         # user's team
-        user_teams = crud.teams.get_teams_by_user_id(
+        rbac.is_mcp_server_configuration_in_user_team(
             db_session=context.db_session,
-            organization_id=context.act_as.organization_id,
             user_id=context.user_id,
+            act_as_organization_id=context.act_as.organization_id,
+            mcp_server_configuration_id=mcp_server_configuration_id,
+            throw_error_if_not_permitted=True,
         )
-        user_team_ids = [team.id for team in user_teams]
-
-        # Check if any of the user's team is allowed by the MCP server configuration
-        if not any(team_id in user_team_ids for team_id in mcp_server_configuration.allowed_teams):
-            logger.info(
-                f"None of the user's team is allowed in MCP Server"
-                f"Configuration {mcp_server_configuration_id}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail=f"None of the user's team is allowed in MCP "
-                f"Server Configuration {mcp_server_configuration_id}",
-            )
 
     return _construct_mcp_server_configuration_public(context.db_session, mcp_server_configuration)
 
@@ -159,7 +148,7 @@ async def delete_mcp_server_configuration(
     mcp_server_configuration_id: UUID,
 ) -> None:
     mcp_server_configuration = crud.mcp_server_configurations.get_mcp_server_configuration_by_id(
-        context.db_session, mcp_server_configuration_id, throw_error_if_not_found=True
+        context.db_session, mcp_server_configuration_id, throw_error_if_not_found=False
     )
 
     if mcp_server_configuration is not None:
