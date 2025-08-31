@@ -9,10 +9,6 @@ export interface AuthConfig {
   [key: string]: unknown;
 }
 
-export interface MCPServerMetadata {
-  need_session: boolean;
-}
-
 export interface MCPToolPublic {
   id: string;
   name: string;

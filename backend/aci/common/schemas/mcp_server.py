@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from aci.common.enums import AuthType, MCPServerTransportType
 from aci.common.schemas.mcp_auth import AuthConfig
@@ -10,12 +10,11 @@ from aci.common.schemas.mcp_tool import MCPToolPublic
 
 
 # NOTE: using a generic metadata schema for now before the schema is finalized
+# TODO: for now this is not used, some potential useful fields: "need_session"
 class MCPServerMetadata(BaseModel):
-    need_session: bool = Field(
-        ...,
-        description="""Whether a session is required to use the mcp server,
-        i.e the mcp-session-id header is required""",
-    )
+    pass
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class MCPServerUpsert(BaseModel, extra="forbid"):

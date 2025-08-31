@@ -15,7 +15,5 @@
       "refresh_token_url": "https://mcp.notion.com/token"
     }
   ],
-  "server_metadata": {
-    "need_session": true
-  }
+  "server_metadata": {}
 }

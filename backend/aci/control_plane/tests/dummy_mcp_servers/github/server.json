@@ -24,7 +24,5 @@
       "refresh_token_url": "https://github.com/login/oauth/access_token"
     }
   ],
-  "server_metadata": {
-    "need_session": true
-  }
+  "server_metadata": {}
 }
