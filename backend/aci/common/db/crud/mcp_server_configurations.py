@@ -62,6 +62,28 @@ def get_mcp_server_configuration_by_id(
         return mcp_server_configuration
 
 
+def get_mcp_server_configurations_by_ids(
+    db_session: Session,
+    mcp_server_configuration_ids: list[UUID],
+) -> list[MCPServerConfiguration]:
+    if not mcp_server_configuration_ids:
+        return []
+
+    statement = select(MCPServerConfiguration).where(
+        MCPServerConfiguration.id.in_(mcp_server_configuration_ids)
+    )
+
+    # make sure the results are in the same order as the mcp_server_configuration_ids
+    results = list(db_session.execute(statement).scalars().all())
+    # map the rows by id, and use the order of requested ids to map the final results
+    results_by_id = {result.id: result for result in results}
+    return [
+        results_by_id[mcp_server_configuration_id]
+        for mcp_server_configuration_id in mcp_server_configuration_ids
+        if mcp_server_configuration_id in results_by_id
+    ]
+
+
 def get_mcp_server_configurations(
     db_session: Session,
     organization_id: UUID,
