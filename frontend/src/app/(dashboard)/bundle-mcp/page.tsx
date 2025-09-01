@@ -1,23 +1,10 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { BsQuestionCircle } from "react-icons/bs";
-import { MdAdd } from "react-icons/md";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useCallback, useMemo } from "react";
-import { DataTable } from "@/components/data-table/data-table";
-import { DataTableAdvancedToolbar } from "@/components/data-table/data-table-advanced-toolbar";
-import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
-import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
-import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
-import { useDataTable } from "@/hooks/use-data-table";
-import { MCPServerBundle } from "@/features/bundle-mcp/types/bundle-mcp.types";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Trash2, ArrowUpDown, Plus, Package, Eye } from "lucide-react";
 import { CreateBundleForm } from "@/features/bundle-mcp/components/create-bundle-form";
 import {
   useCreateMCPServerBundle,
@@ -25,8 +12,10 @@ import {
   useMCPServerBundles,
 } from "@/features/bundle-mcp/hooks/use-bundle-mcp";
 import { useMCPServerConfigurations } from "@/features/mcp/hooks/use-mcp-servers";
-import { IdDisplay } from "@/components/ui-extensions/id-display";
-import { Trash2, Text, Calendar } from "lucide-react";
+import { MCPServerBundle } from "@/features/bundle-mcp/types/bundle-mcp.types";
+import { formatToLocalTime } from "@/utils/time";
+import { EnhancedDataTable } from "@/components/ui-extensions/enhanced-data-table/data-table";
+import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,9 +27,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import type { ColumnDef } from "@tanstack/react-table";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+const columnHelper = createColumnHelper<MCPServerBundle>();
 
 export default function BundleMCPPage() {
+  const router = useRouter();
   const { data: bundles = [], isLoading: isBundlesLoading } =
     useMCPServerBundles();
   const { data: configurationsData, isLoading: isConfigsLoading } =
@@ -55,105 +53,208 @@ export default function BundleMCPPage() {
       try {
         await deleteBundleMutation(bundleId);
       } catch (error) {
-        console.error("Error deleting bundle:", error);
-        toast.error("Failed to delete bundle");
+        console.error("Failed to delete bundle:", error);
       }
     },
     [deleteBundleMutation],
   );
 
-  const columns = useMemo<ColumnDef<MCPServerBundle>[]>(
-    () => [
-      {
+  const columns: ColumnDef<MCPServerBundle>[] = useMemo(() => {
+    return [
+      columnHelper.accessor("name", {
         id: "name",
-        accessorKey: "name",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Bundle Name" />
+          <div className="flex items-center justify-start">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                column.toggleSorting(column.getIsSorted() === "asc")
+              }
+              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
+            >
+              NAME
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         ),
-        cell: ({ row }) => <IdDisplay id={row.getValue("name")} dim={false} />,
-        meta: {
-          label: "Bundle Name",
-          placeholder: "Search by name...",
-          variant: "text",
-          icon: Text,
-        },
-        enableColumnFilter: true,
-        enableSorting: true,
-      },
-      {
-        id: "created_at",
-        accessorKey: "created_at",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Created" />
-        ),
-        cell: ({ row }) =>
-          new Date(row.getValue("created_at")).toLocaleDateString(),
-        meta: {
-          label: "Created Date",
-          variant: "date",
-          icon: Calendar,
-        },
-        enableColumnFilter: true,
-        enableSorting: true,
-      },
-      {
-        id: "actions",
-        header: () => "Actions",
-        cell: ({ row }) => {
-          const bundle = row.original;
+        cell: (info) => {
+          const name = info.getValue();
           return (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Bundle</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete the bundle &quot;
-                    {bundle.name}
-                    &quot;? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => handleDeleteBundle(bundle.id)}
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-muted-foreground" />
+              <div className="font-medium">{name}</div>
+            </div>
           );
         },
-        enableSorting: false,
-        enableHiding: false,
-      },
-    ],
-    [handleDeleteBundle],
-  );
+        enableGlobalFilter: true,
+      }),
 
-  const { table } = useDataTable({
-    data: bundles as MCPServerBundle[],
-    columns,
-    pageCount: Math.ceil(bundles.length / 10),
-    initialState: {
-      sorting: [{ id: "created_at", desc: true }],
-      pagination: { pageIndex: 0, pageSize: 10 },
-    },
-    getRowId: (row) => row.id,
-    enableAdvancedFilter: true,
-  });
+      columnHelper.accessor("id", {
+        id: "bundle_id",
+        header: ({ column }) => (
+          <div className="flex items-center justify-start">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                column.toggleSorting(column.getIsSorted() === "asc")
+              }
+              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
+            >
+              BUNDLE ID
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        ),
+        cell: (info) => {
+          const id = info.getValue();
+          return (
+            <div className="font-mono text-xs text-muted-foreground">{id}</div>
+          );
+        },
+        enableGlobalFilter: true,
+      }),
+
+      columnHelper.accessor("mcp_server_configurations", {
+        id: "configurations",
+        header: ({ column }) => (
+          <div className="flex items-center justify-start">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                column.toggleSorting(column.getIsSorted() === "asc")
+              }
+              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
+            >
+              CONFIGURATIONS
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        ),
+        cell: (info) => {
+          const configurations = info.getValue();
+          const count = configurations?.length || 0;
+          return (
+            <Badge variant="secondary">
+              {count} configuration{count !== 1 ? "s" : ""}
+            </Badge>
+          );
+        },
+        enableGlobalFilter: false,
+      }),
+
+      columnHelper.accessor("created_at", {
+        id: "created_at",
+        header: ({ column }) => (
+          <div className="flex items-center justify-start">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                column.toggleSorting(column.getIsSorted() === "asc")
+              }
+              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
+            >
+              CREATED
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        ),
+        cell: (info) => {
+          const dateString = info.getValue();
+          return (
+            <div className="text-sm text-muted-foreground">
+              {formatToLocalTime(dateString)}
+            </div>
+          );
+        },
+        enableGlobalFilter: false,
+      }),
+
+      columnHelper.accessor((row) => row, {
+        id: "actions",
+        header: "",
+        cell: (info) => {
+          const bundle = info.getValue();
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/bundle-mcp/${bundle.id}`)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View Bundle</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Bundle?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete
+                      the bundle &quot;{bundle.name}&quot;.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => handleDeleteBundle(bundle.id)}
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          );
+        },
+        enableGlobalFilter: false,
+      }),
+    ] as ColumnDef<MCPServerBundle>[];
+  }, [handleDeleteBundle, router]);
+
+  if (isBundlesLoading) {
+    return (
+      <div>
+        <div className="px-4 py-3 border-b">
+          <h1 className="text-2xl font-bold">Bundle MCP</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage your MCP server bundles and configurations
+          </p>
+        </div>
+        <div className="flex items-center justify-center p-8">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between m-4">
+    <div>
+      <div className="px-4 py-3 border-b flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Bundle MCP</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold">Bundle MCP</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Manage your MCP server bundles and configurations
           </p>
         </div>
@@ -161,54 +262,63 @@ export default function BundleMCPPage() {
           title="Create MCP Bundle"
           availableConfigurations={configurations.map((config) => ({
             id: config.id,
-            name: config.mcp_server.name,
+            name: `${config.mcp_server.name} (${config.id})`,
           }))}
           onSubmit={async (values) => {
-            try {
-              await createBundleMutation(values);
-            } catch (error) {
-              console.error("Error creating bundle:", error);
-              toast.error("Failed to create bundle");
-            }
+            await createBundleMutation(values);
           }}
         >
           <Button variant="default" disabled={isConfigsLoading}>
-            <MdAdd />
+            <Plus className="h-4 w-4 mr-2" />
             Create Bundle
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="cursor-pointer ml-1">
-                  <BsQuestionCircle className="h-4 w-4 text-primary-foreground/70" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p className="text-xs">
-                  Create a new MCP server bundle with selected configurations.
-                </p>
-              </TooltipContent>
-            </Tooltip>
           </Button>
         </CreateBundleForm>
       </div>
-      <Separator />
 
-      <div className="p-4">
-        <div className="mb-4">
-          <div className="flex items-center gap-2">
-            <p className="text-sm">
-              Each bundle groups multiple MCP server configurations for easier
-              management.
-            </p>
-          </div>
-        </div>
-
-        {!isBundlesLoading && bundles && bundles.length > 0 && (
-          <DataTable table={table}>
-            <DataTableAdvancedToolbar table={table}>
-              <DataTableFilterList table={table} />
-              <DataTableSortList table={table} />
-            </DataTableAdvancedToolbar>
-          </DataTable>
+      <div className="p-4 space-y-4">
+        {bundles && bundles.length > 0 ? (
+          <EnhancedDataTable
+            columns={columns}
+            data={bundles}
+            defaultSorting={[{ id: "created_at", desc: true }]}
+            searchBarProps={{
+              placeholder: "Search bundles...",
+            }}
+            paginationOptions={{
+              initialPageIndex: 0,
+              initialPageSize: 15,
+            }}
+          />
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="text-center space-y-3">
+                <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                  <Package className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold">No bundles yet</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Create your first bundle to group MCP server configurations
+                  for easier management
+                </p>
+                <CreateBundleForm
+                  title="Create MCP Bundle"
+                  availableConfigurations={configurations.map((config) => ({
+                    id: config.id,
+                    name: `${config.mcp_server.name} (${config.id})`,
+                  }))}
+                  onSubmit={async (values) => {
+                    await createBundleMutation(values);
+                  }}
+                >
+                  <Button variant="default" disabled={isConfigsLoading}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Bundle
+                  </Button>
+                </CreateBundleForm>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

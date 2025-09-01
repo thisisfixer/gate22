@@ -19,9 +19,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { HiOutlineServerStack } from "react-icons/hi2";
-import { RiSettings3Line, RiLinkUnlinkM } from "react-icons/ri";
-import { AiOutlineRobot } from "react-icons/ai";
-import { Link2 } from "lucide-react";
+import { RiSettings3Line } from "react-icons/ri";
+import { Link2, Settings2, Package } from "lucide-react";
 
 import {
   Tooltip,
@@ -40,17 +39,17 @@ export const sidebarItems = [
   {
     title: "MCP Configuration",
     url: `/mcp-configuration`,
-    icon: RiLinkUnlinkM,
+    icon: Settings2,
   },
   {
-    title: "Linked Accounts",
-    url: `/linked-accounts`,
+    title: "Connected Accounts",
+    url: `/connected-accounts`,
     icon: Link2,
   },
   {
     title: "Bundle MCP",
     url: `/bundle-mcp`,
-    icon: AiOutlineRobot,
+    icon: Package,
   },
   {
     title: "Settings",
