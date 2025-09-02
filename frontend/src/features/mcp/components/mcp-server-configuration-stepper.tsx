@@ -11,11 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   MCPServerPublic,
   MCPServerConfigurationCreate,
@@ -35,9 +38,10 @@ interface MCPServerConfigurationStepperProps {
 
 // Define the stepper outside the component
 const { useStepper, steps } = defineStepper(
+  { id: "general", label: "General" },
+  { id: "account", label: "Authentication" },
   { id: "tools", label: "Tools" },
   { id: "teams", label: "Teams" },
-  { id: "account", label: "Authentication" },
 );
 
 // Helper functions for auth type display
@@ -73,6 +77,9 @@ export function MCPServerConfigurationStepper({
   server,
 }: MCPServerConfigurationStepperProps) {
   const stepper = useStepper();
+  const [name, setName] = useState<string>("");
+  const [nameError, setNameError] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
   const [selectedAuthType, setSelectedAuthType] = useState<AuthType>(
     server?.supported_auth_types?.[0] || AuthType.NO_AUTH,
   );
@@ -89,6 +96,9 @@ export function MCPServerConfigurationStepper({
   useEffect(() => {
     if (isOpen) {
       stepper.reset();
+      setName("");
+      setNameError("");
+      setDescription("");
       setSelectedTools(new Set());
       setSelectedTeams(new Set());
       setAllToolsEnabled(true);
@@ -126,18 +136,14 @@ export function MCPServerConfigurationStepper({
     setSelectedTools(newSelectedTools);
   };
 
-  const handleTeamToggle = (teamId: string) => {
-    const newSelectedTeams = new Set(selectedTeams);
-    if (newSelectedTeams.has(teamId)) {
-      newSelectedTeams.delete(teamId);
-    } else {
-      newSelectedTeams.add(teamId);
-    }
-    setSelectedTeams(newSelectedTeams);
-  };
-
   const handleSubmit = async () => {
     // Final validation
+    if (!name.trim()) {
+      setNameError("Configuration name is required");
+      stepper.goTo("general"); // Go to general step
+      return;
+    }
+
     if (selectedTeams.size === 0) {
       toast.error("Please select at least one team");
       stepper.goTo("teams"); // Go to teams step
@@ -146,6 +152,8 @@ export function MCPServerConfigurationStepper({
 
     const configurationData: MCPServerConfigurationCreate = {
       mcp_server_id: server.id,
+      name: name.trim(),
+      description: description.trim() || undefined,
       auth_type: selectedAuthType,
       all_tools_enabled: allToolsEnabled,
       enabled_tools: allToolsEnabled ? [] : Array.from(selectedTools),
@@ -167,16 +175,18 @@ export function MCPServerConfigurationStepper({
 
   const isStepValid = (stepId: string) => {
     switch (stepId) {
-      case "tools":
-        return allToolsEnabled || selectedTools.size > 0;
-      case "teams":
-        return selectedTeams.size > 0; // Must select at least one team
+      case "general":
+        return !!name.trim();
       case "account":
         return (
           !server?.supported_auth_types ||
           server.supported_auth_types.length === 0 ||
           selectedAuthType !== undefined
         );
+      case "tools":
+        return allToolsEnabled || selectedTools.size > 0;
+      case "teams":
+        return selectedTeams.size > 0; // Must select at least one team
       default:
         return false;
     }
@@ -191,13 +201,104 @@ export function MCPServerConfigurationStepper({
         <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
           <DialogTitle>Configure {server?.name}</DialogTitle>
           <DialogDescription>
-            Set up access and authentication for this MCP server
+            Set up authentication and access permissions for this MCP server
           </DialogDescription>
         </DialogHeader>
 
         {/* Main Content */}
         <ScrollArea className="flex-1 px-6">
           <div className="space-y-6 pb-4">
+            {stepper.current.id === "general" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium mb-1">
+                    General Information
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Provide a name and description for this configuration
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="config-name">Configuration Name *</Label>
+                  <Input
+                    id="config-name"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (nameError) setNameError("");
+                    }}
+                    placeholder="Enter a name for this configuration"
+                    className={nameError ? "border-red-500" : ""}
+                    maxLength={100}
+                    required
+                  />
+                  {nameError && (
+                    <p className="text-xs text-red-500">{nameError}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="config-description">Description</Label>
+                  <Textarea
+                    id="config-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Optional description for this configuration"
+                    rows={3}
+                    maxLength={500}
+                  />
+                </div>
+              </div>
+            )}
+
+            {stepper.current.id === "account" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium mb-1">Authentication</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Choose how users will authenticate with this server
+                  </p>
+                </div>
+
+                {!server?.supported_auth_types ||
+                server.supported_auth_types.length === 0 ? (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      No authentication methods available for this server.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <RadioGroup
+                    value={selectedAuthType}
+                    onValueChange={(value) =>
+                      setSelectedAuthType(value as AuthType)
+                    }
+                    className="space-y-1.5"
+                  >
+                    {server.supported_auth_types.map((authType) => (
+                      <label
+                        key={authType}
+                        htmlFor={authType}
+                        className="flex items-center space-x-2 p-2 border rounded hover:bg-accent/50 transition-colors cursor-pointer"
+                      >
+                        <RadioGroupItem value={authType} id={authType} />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">
+                            {getAuthTypeLabel(authType)}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {getAuthTypeDescription(authType)}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </RadioGroup>
+                )}
+              </div>
+            )}
+
             {stepper.current.id === "tools" && (
               <div className="space-y-4">
                 <div>
@@ -298,109 +399,38 @@ export function MCPServerConfigurationStepper({
                     </AlertDescription>
                   </Alert>
                 ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-medium text-muted-foreground">
-                        Available teams
-                      </Label>
-                      <span className="text-xs text-muted-foreground">
-                        {selectedTeams.size} selected
-                      </span>
-                    </div>
-                    <div className="grid gap-1.5 max-h-[300px] overflow-y-auto pr-2">
-                      {teams.map((team) => (
-                        <label
-                          key={team.team_id}
-                          className="flex items-start space-x-2 p-2 border rounded hover:bg-accent/50 transition-colors cursor-pointer"
-                        >
-                          <Checkbox
-                            id={team.team_id}
-                            checked={selectedTeams.has(team.team_id)}
-                            onCheckedChange={() =>
-                              handleTeamToggle(team.team_id)
-                            }
-                            className="mt-0.5"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-medium">
-                                {team.name}
-                              </span>
-                              {team.member_count !== undefined && (
-                                <span className="text-xs text-muted-foreground shrink-0">
-                                  {team.member_count} member
-                                  {team.member_count !== 1 ? "s" : ""}
-                                </span>
-                              )}
-                            </div>
-                            {team.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-1">
-                                {team.description}
-                              </p>
-                            )}
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                  <div className="space-y-3">
+                    <MultiSelect
+                      options={teams.map((team) => ({
+                        value: team.team_id,
+                        label: `${team.name}${team.member_count !== undefined ? ` (${team.member_count} member${team.member_count !== 1 ? "s" : ""})` : ""}`,
+                      }))}
+                      selected={Array.from(selectedTeams)}
+                      onChange={(selected) =>
+                        setSelectedTeams(new Set(selected))
+                      }
+                      placeholder="Select teams..."
+                      searchPlaceholder="Search teams..."
+                      emptyText="No teams found."
+                      className="w-full"
+                    />
+                    {selectedTeams.size > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {selectedTeams.size} team
+                        {selectedTeams.size !== 1 ? "s" : ""} selected
+                      </p>
+                    )}
+                    {selectedTeams.size === 0 &&
+                      !teamsLoading &&
+                      teams.length > 0 && (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            Please select at least one team to proceed
+                          </AlertDescription>
+                        </Alert>
+                      )}
                   </div>
-                )}
-
-                {selectedTeams.size === 0 &&
-                  !teamsLoading &&
-                  teams.length > 0 && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-xs">
-                        Please select at least one team to proceed
-                      </AlertDescription>
-                    </Alert>
-                  )}
-              </div>
-            )}
-
-            {stepper.current.id === "account" && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium mb-1">Authentication</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Choose how users will authenticate
-                  </p>
-                </div>
-
-                {!server?.supported_auth_types ||
-                server.supported_auth_types.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      No authentication methods available for this server.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <RadioGroup
-                    value={selectedAuthType}
-                    onValueChange={(value) =>
-                      setSelectedAuthType(value as AuthType)
-                    }
-                    className="space-y-1.5"
-                  >
-                    {server.supported_auth_types.map((authType) => (
-                      <label
-                        key={authType}
-                        htmlFor={authType}
-                        className="flex items-center space-x-2 p-2 border rounded hover:bg-accent/50 transition-colors cursor-pointer"
-                      >
-                        <RadioGroupItem value={authType} id={authType} />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium">
-                            {getAuthTypeLabel(authType)}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {getAuthTypeDescription(authType)}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </RadioGroup>
                 )}
               </div>
             )}

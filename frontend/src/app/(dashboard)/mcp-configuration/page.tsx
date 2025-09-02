@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Image from "next/image";
-import { ArrowUpDown, Trash2, Settings, Eye } from "lucide-react";
+import { Trash2, Settings, Eye, ArrowUpDown } from "lucide-react";
+import { formatToLocalTime } from "@/utils/time";
 import { EnhancedDataTable } from "@/components/ui-extensions/enhanced-data-table/data-table";
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import {
@@ -36,7 +37,7 @@ const columnHelper = createColumnHelper<MCPServerConfigurationPublicBasic>();
 export default function MCPConfigurationPage() {
   const router = useRouter();
   const { data: configurationsResponse, isLoading } =
-    useMCPServerConfigurations();
+    useMCPServerConfigurations({ limit: 100 });
   const deleteConfiguration = useDeleteMCPServerConfiguration();
 
   const handleDelete = useCallback(
@@ -57,18 +58,9 @@ export default function MCPConfigurationPage() {
       return [
         columnHelper.accessor("id", {
           id: "configuration_id",
-          header: ({ column }) => (
+          header: () => (
             <div className="flex items-center justify-start">
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  column.toggleSorting(column.getIsSorted() === "asc")
-                }
-                className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
-              >
-                CONFIGURATION ID
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
+              <span className="text-left font-normal">CONFIGURATION ID</span>
             </div>
           ),
           cell: (info) => {
@@ -82,20 +74,35 @@ export default function MCPConfigurationPage() {
           enableGlobalFilter: true,
         }),
 
+        columnHelper.accessor("name", {
+          id: "configuration_name",
+          header: () => (
+            <div className="flex items-center justify-start">
+              <span className="text-left font-normal">CONFIGURATION NAME</span>
+            </div>
+          ),
+          cell: (info) => {
+            const name = info.getValue();
+            const description = info.row.original.description;
+            return (
+              <div className="flex flex-col">
+                <div className="font-medium">{name}</div>
+                {description && (
+                  <div className="text-xs text-muted-foreground">
+                    {description}
+                  </div>
+                )}
+              </div>
+            );
+          },
+          enableGlobalFilter: true,
+        }),
+
         columnHelper.accessor((row) => row.mcp_server?.name, {
           id: "mcp_server_name",
-          header: ({ column }) => (
+          header: () => (
             <div className="flex items-center justify-start">
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  column.toggleSorting(column.getIsSorted() === "asc")
-                }
-                className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
-              >
-                MCP SERVER
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
+              <span className="text-left font-normal">MCP SERVER</span>
             </div>
           ),
           cell: (info) => {
@@ -118,6 +125,33 @@ export default function MCPConfigurationPage() {
             );
           },
           enableGlobalFilter: true,
+        }),
+
+        columnHelper.accessor("created_at", {
+          id: "created_at",
+          header: ({ column }) => (
+            <div className="flex items-center justify-start">
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  column.toggleSorting(column.getIsSorted() === "asc")
+                }
+                className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
+              >
+                CREATED
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          ),
+          cell: (info) => {
+            const dateString = info.getValue();
+            return (
+              <div className="text-sm text-muted-foreground">
+                {dateString ? formatToLocalTime(dateString) : "-"}
+              </div>
+            );
+          },
+          enableGlobalFilter: false,
         }),
 
         columnHelper.accessor((row) => row, {
@@ -224,7 +258,7 @@ export default function MCPConfigurationPage() {
           <EnhancedDataTable
             columns={columns}
             data={configurationsResponse.data}
-            defaultSorting={[{ id: "mcp_server_name", desc: false }]}
+            defaultSorting={[{ id: "created_at", desc: true }]}
             searchBarProps={{
               placeholder: "Search configurations...",
             }}

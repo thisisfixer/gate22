@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
@@ -34,7 +35,9 @@ const columnHelper = createColumnHelper<ConnectedAccount>();
 export default function ConnectedAccountsPage() {
   const searchParams = useSearchParams();
   const { data: accounts, isLoading } = useConnectedAccounts();
-  const { data: mcpConfigurationsResponse } = useMCPServerConfigurations();
+  const { data: mcpConfigurationsResponse } = useMCPServerConfigurations({
+    limit: 100,
+  });
   const { mutateAsync: deleteAccount } = useDeleteConnectedAccount();
 
   // Check for OAuth errors in query params
@@ -57,10 +60,14 @@ export default function ConnectedAccountsPage() {
         acc[config.id] = {
           name: config.mcp_server?.name || config.id,
           logo: config.mcp_server?.logo || null,
+          configName: config.name || config.id,
         };
         return acc;
       },
-      {} as Record<string, { name: string; logo: string | null }>,
+      {} as Record<
+        string,
+        { name: string; logo: string | null; configName: string }
+      >,
     );
   }, [mcpConfigurationsResponse]);
 
@@ -83,18 +90,9 @@ export default function ConnectedAccountsPage() {
     return [
       columnHelper.accessor("id", {
         id: "account_id",
-        header: ({ column }) => (
+        header: () => (
           <div className="flex items-center justify-start">
-            <Button
-              variant="ghost"
-              onClick={() =>
-                column.toggleSorting(column.getIsSorted() === "asc")
-              }
-              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
-            >
-              CONNECTED ACCOUNT ID
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <span className="text-left font-normal">CONNECTED ACCOUNT ID</span>
           </div>
         ),
         cell: (info) => {
@@ -107,27 +105,22 @@ export default function ConnectedAccountsPage() {
       }),
 
       columnHelper.accessor("mcp_server_configuration_id", {
-        id: "configuration_id",
-        header: ({ column }) => (
+        id: "configuration_name",
+        header: () => (
           <div className="flex items-center justify-start">
-            <Button
-              variant="ghost"
-              onClick={() =>
-                column.toggleSorting(column.getIsSorted() === "asc")
-              }
-              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
-            >
-              CONFIGURATION ID
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <span className="text-left font-normal">CONFIGURATION NAME</span>
           </div>
         ),
         cell: (info) => {
           const configId = info.getValue();
+          const config = mcpConfigMap[configId];
           return (
-            <div className="font-mono text-xs text-muted-foreground">
-              {configId}
-            </div>
+            <Link
+              href={`/mcp-configuration/${configId}`}
+              className="text-primary hover:underline font-medium"
+            >
+              {config?.configName || "Unknown"}
+            </Link>
           );
         },
         enableGlobalFilter: true,
@@ -135,18 +128,9 @@ export default function ConnectedAccountsPage() {
 
       columnHelper.accessor("mcp_server_configuration_id", {
         id: "mcp_server",
-        header: ({ column }) => (
+        header: () => (
           <div className="flex items-center justify-start">
-            <Button
-              variant="ghost"
-              onClick={() =>
-                column.toggleSorting(column.getIsSorted() === "asc")
-              }
-              className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
-            >
-              MCP SERVER
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <span className="text-left font-normal">MCP SERVER</span>
           </div>
         ),
         cell: (info) => {
