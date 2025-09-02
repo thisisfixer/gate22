@@ -9,9 +9,9 @@ from aci.common.db import crud
 from aci.common.db.sql_models import MCPServerBundle
 from aci.common.embeddings import generate_embedding
 from aci.common.logging_setup import get_logger
-from aci.control_plane import config
-from aci.control_plane.logging import LogEvent
-from aci.control_plane.routes.mcp.jsonrpc import (
+from aci.mcp import config
+from aci.mcp.logging import LogEvent
+from aci.mcp.routes.jsonrpc import (
     JSONRPCErrorCode,
     JSONRPCErrorResponse,
     JSONRPCSuccessResponse,

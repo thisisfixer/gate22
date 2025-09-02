@@ -1,9 +1,9 @@
 from fastapi import status
 
 
-class ControlPlaneException(Exception):  # noqa: N818
+class RemoteMCPException(Exception):  # noqa: N818
     """
-    Base class for all Control Plane exceptions with consistent structure.
+    Base class for all Remote MCP exceptions with consistent structure.
 
     Attributes:
         title (str): error title.
@@ -31,7 +31,7 @@ class ControlPlaneException(Exception):  # noqa: N818
         return self.title
 
 
-class OAuth2Error(ControlPlaneException):
+class OAuth2Error(RemoteMCPException):
     """
     Exception raised when an OAuth2 error occurs
     """
@@ -44,7 +44,7 @@ class OAuth2Error(ControlPlaneException):
         )
 
 
-class NoImplementationFound(ControlPlaneException):
+class NoImplementationFound(RemoteMCPException):
     """
     Exception raised when a feature or function is not implemented
     """
@@ -57,7 +57,7 @@ class NoImplementationFound(ControlPlaneException):
         )
 
 
-class MCPServerConfigurationNotFound(ControlPlaneException):
+class MCPServerConfigurationNotFound(RemoteMCPException):
     """
     Exception raised when an mcp server configuration is not found
     """
@@ -70,7 +70,7 @@ class MCPServerConfigurationNotFound(ControlPlaneException):
         )
 
 
-class NotPermittedError(ControlPlaneException):
+class NotPermittedError(RemoteMCPException):
     """
     Exception raised when a user is not permitted to act as the requested organization and role.
     """
@@ -83,7 +83,7 @@ class NotPermittedError(ControlPlaneException):
         )
 
 
-class UnexpectedError(ControlPlaneException):
+class UnexpectedError(RemoteMCPException):
     """
     Exception raised when an unexpected error occurs
     """
@@ -94,3 +94,33 @@ class UnexpectedError(ControlPlaneException):
             message=message,
             error_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+class MCPToolNotFound(RemoteMCPException):
+    """
+    Exception raised when an mcp tool is not found
+    """
+
+    def __init__(self, name: str):
+        super().__init__(title="MCP tool not found", message=f"MCP tool {name} not found")
+
+
+class MCPServerNotConfigured(RemoteMCPException):
+    """
+    Exception raised when an mcp server is not configured
+    """
+
+    def __init__(self, mcp_server_name: str):
+        super().__init__(
+            title="MCP server not configured",
+            message=f"MCP server {mcp_server_name} not configured",
+        )
+
+
+class MCPToolNotEnabled(RemoteMCPException):
+    """
+    Exception raised when an mcp tool is not enabled in the mcp server configuration
+    """
+
+    def __init__(self, tool_name: str):
+        super().__init__(title="MCP tool not enabled", message=f"MCP tool {tool_name} not enabled")

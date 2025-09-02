@@ -18,12 +18,12 @@ from aci.common.schemas.mcp_auth import (
     AuthCredentials,
 )
 from aci.common.schemas.mcp_tool import MCPToolMetadata
-from aci.control_plane.exceptions import (
+from aci.mcp.exceptions import (
     MCPServerNotConfigured,
     MCPToolNotEnabled,
     MCPToolNotFound,
 )
-from aci.control_plane.routes.mcp.jsonrpc import (
+from aci.mcp.routes.jsonrpc import (
     JSONRPCErrorCode,
     JSONRPCErrorResponse,
     JSONRPCSuccessResponse,

@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from aci.common.db import crud
 from aci.common.logging_setup import get_logger
-from aci.control_plane import dependencies as deps
-from aci.control_plane.routes.mcp.jsonrpc import (
+from aci.mcp import dependencies as deps
+from aci.mcp.routes.jsonrpc import (
     JSONRPCErrorCode,
     JSONRPCErrorResponse,
     JSONRPCInitializeRequest,
@@ -17,8 +17,8 @@ from aci.control_plane.routes.mcp.jsonrpc import (
     JSONRPCToolsCallRequest,
     JSONRPCToolsListRequest,
 )
-from aci.control_plane.routes.mcp.tools.execute_tool import EXECUTE_TOOL, handle_execute_tool
-from aci.control_plane.routes.mcp.tools.search_tools import SEARCH_TOOLS, handle_search_tools
+from aci.mcp.routes.tools.execute_tool import EXECUTE_TOOL, handle_execute_tool
+from aci.mcp.routes.tools.search_tools import SEARCH_TOOLS, handle_search_tools
 
 logger = get_logger(__name__)
 router = APIRouter()
