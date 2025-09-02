@@ -1,16 +1,30 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from aci.common.schemas.mcp_server_configuration import (
     MCPServerConfigurationPublic,
 )
 
 
+class ConnectedAccountAPIKeyCreate(BaseModel, extra="forbid"):
+    mcp_server_configuration_id: UUID
+    api_key: str = Field(min_length=1)  # for API key auth type. # TODO: use SecretStr
+
+
+class ConnectedAccountOAuth2Create(BaseModel, extra="forbid"):
+    mcp_server_configuration_id: UUID
+    redirect_url_after_account_creation: str | None = None  # for OAuth2 auth type
+
+
+class ConnectedAccountNoAuthCreate(BaseModel, extra="forbid"):
+    mcp_server_configuration_id: UUID
+
+
 class ConnectedAccountCreate(BaseModel):
     mcp_server_configuration_id: UUID
-    # TODO: typing for different auth data of different auth types?
+    api_key: str | None = None
     redirect_url_after_account_creation: str | None = None
 
 

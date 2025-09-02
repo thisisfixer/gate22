@@ -3,12 +3,81 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from aci.common.db import crud
-from aci.common.db.sql_models import ConnectedAccount, User
+from aci.common.db.sql_models import ConnectedAccount, MCPServerConfiguration, Team, User
+from aci.common.enums import AuthType
 from aci.common.logging_setup import get_logger
-from aci.common.schemas.connected_account import ConnectedAccountPublic
+from aci.common.schemas.connected_account import (
+    ConnectedAccountPublic,
+)
 from aci.common.schemas.pagination import PaginationResponse
 
 logger = get_logger(__name__)
+
+
+@pytest.mark.parametrize("is_team_allowed_by_config", [True, False])
+@pytest.mark.parametrize(
+    ("auth_type", "api_key", "redirect_url_after_account_creation", "should_succeed"),
+    [
+        (AuthType.API_KEY, "dummy_api_key", None, True),
+        (AuthType.API_KEY, "dummy_api_key", "some_random_url", False),
+        (AuthType.API_KEY, None, None, False),
+        (AuthType.API_KEY, "", None, False),
+        (AuthType.OAUTH2, None, "some_random_url", True),
+        (AuthType.OAUTH2, None, None, True),
+        (AuthType.OAUTH2, "dummy_api_key", None, False),
+        (AuthType.NO_AUTH, None, None, True),
+        (AuthType.NO_AUTH, "dummy_api_key", None, False),
+        (AuthType.NO_AUTH, "dummy_api_key", "some_random_url", False),
+    ],
+)
+def test_create_connected_account(
+    test_client: TestClient,
+    db_session: Session,
+    request: pytest.FixtureRequest,
+    auth_type: AuthType,
+    api_key: str | None,
+    redirect_url_after_account_creation: str | None,
+    should_succeed: bool,
+    dummy_team: Team,
+    dummy_user: User,
+    dummy_access_token_member: str,
+    dummy_mcp_server_configuration: MCPServerConfiguration,
+    is_team_allowed_by_config: bool,
+) -> None:
+    # dummy_mcp_server_configurations has 2 dummy MCP server configurations, both without team
+    config_added_to_team = dummy_mcp_server_configuration
+    if is_team_allowed_by_config:
+        config_added_to_team.allowed_teams = [dummy_team.id]
+    else:
+        config_added_to_team.allowed_teams = []
+
+    config_added_to_team.auth_type = auth_type
+    db_session.commit()
+
+    body = {}
+    if api_key is not None:
+        body["api_key"] = api_key
+    if redirect_url_after_account_creation is not None:
+        body["redirect_url_after_account_creation"] = redirect_url_after_account_creation
+    body["mcp_server_configuration_id"] = str(dummy_mcp_server_configuration.id)
+
+    response = test_client.post(
+        "/v1/connected-accounts",
+        headers={"Authorization": f"Bearer {dummy_access_token_member}"},
+        json=body,
+    )
+
+    # if not allowed to add to team, should return 403
+    if not is_team_allowed_by_config:
+        assert response.status_code == 403
+        assert response.json()["error"].startswith("Not permitted")
+
+    else:
+        # assert input check
+        if should_succeed:
+            assert response.status_code == 200
+        else:
+            assert response.status_code == 400
 
 
 @pytest.mark.parametrize(
