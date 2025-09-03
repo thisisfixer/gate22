@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { BreadcrumbLinks } from "./BreadcrumbLinks";
 import { usePathname } from "next/navigation";
 import { OrgSelector } from "./org-selector";
+import { RoleSelector } from "./role-selector";
 import { UserProfileDropdown } from "./user-profile-dropdown";
 
 export const Header = () => {
@@ -69,6 +70,8 @@ export const Header = () => {
           </Button> */}
 
           <div className="h-6 w-px bg-border mx-1" />
+
+          <RoleSelector />
 
           <UserProfileDropdown />
         </div>

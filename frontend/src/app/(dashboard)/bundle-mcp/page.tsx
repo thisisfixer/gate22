@@ -16,6 +16,8 @@ import { MCPServerBundle } from "@/features/bundle-mcp/types/bundle-mcp.types";
 import { formatToLocalTime } from "@/utils/time";
 import { EnhancedDataTable } from "@/components/ui-extensions/enhanced-data-table/data-table";
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
+import { PermissionGuard } from "@/components/rbac/permission-guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,8 +41,11 @@ const columnHelper = createColumnHelper<MCPServerBundle>();
 
 export default function BundleMCPPage() {
   const router = useRouter();
-  const { data: bundles = [], isLoading: isBundlesLoading } =
-    useMCPServerBundles();
+  const {
+    data: bundles = [],
+    isLoading: isBundlesLoading,
+    canCreate,
+  } = useMCPServerBundles();
   const { data: configurationsData, isLoading: isConfigsLoading } =
     useMCPServerConfigurations({ limit: 100 });
   const configurations = configurationsData?.data || [];
@@ -49,9 +54,9 @@ export default function BundleMCPPage() {
   const { mutateAsync: deleteBundleMutation } = useDeleteMCPServerBundle();
 
   const handleDeleteBundle = useCallback(
-    async (bundleId: string) => {
+    async (bundleId: string, bundleOwnerId: string) => {
       try {
-        await deleteBundleMutation(bundleId);
+        await deleteBundleMutation({ bundleId, bundleOwnerId });
       } catch (error) {
         console.error("Failed to delete bundle:", error);
       }
@@ -166,35 +171,39 @@ export default function BundleMCPPage() {
                 </Tooltip>
               </TooltipProvider>
 
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Bundle?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete
-                      the bundle &quot;{bundle.name}&quot;.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      onClick={() => handleDeleteBundle(bundle.id)}
+              <PermissionGuard permission={PERMISSIONS.BUNDLE_DELETE_OWN}>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
                     >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Bundle?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently
+                        delete the bundle &quot;{bundle.name}&quot;.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() =>
+                          handleDeleteBundle(bundle.id, bundle.user_id)
+                        }
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </PermissionGuard>
             </div>
           );
         },
@@ -231,22 +240,24 @@ export default function BundleMCPPage() {
             Manage your MCP server bundles and configurations
           </p>
         </div>
-        <CreateBundleForm
-          title="Create MCP Bundle"
-          availableConfigurations={configurations.map((config) => ({
-            id: config.id,
-            name: config.name,
-            icon: config.mcp_server?.logo || undefined,
-          }))}
-          onSubmit={async (values) => {
-            await createBundleMutation(values);
-          }}
-        >
-          <Button variant="default" disabled={isConfigsLoading}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Bundle
-          </Button>
-        </CreateBundleForm>
+        <PermissionGuard permission={PERMISSIONS.BUNDLE_CREATE}>
+          <CreateBundleForm
+            title="Create MCP Bundle"
+            availableConfigurations={configurations.map((config) => ({
+              id: config.id,
+              name: config.name,
+              icon: config.mcp_server?.logo || undefined,
+            }))}
+            onSubmit={async (values) => {
+              await createBundleMutation(values);
+            }}
+          >
+            <Button variant="default" disabled={isConfigsLoading || !canCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Bundle
+            </Button>
+          </CreateBundleForm>
+        </PermissionGuard>
       </div>
 
       <div className="p-4 space-y-4">
@@ -275,22 +286,27 @@ export default function BundleMCPPage() {
                   Create your first bundle to group MCP server configurations
                   for easier management
                 </p>
-                <CreateBundleForm
-                  title="Create MCP Bundle"
-                  availableConfigurations={configurations.map((config) => ({
-                    id: config.id,
-                    name: config.name,
-                    icon: config.mcp_server?.logo || undefined,
-                  }))}
-                  onSubmit={async (values) => {
-                    await createBundleMutation(values);
-                  }}
-                >
-                  <Button variant="default" disabled={isConfigsLoading}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Bundle
-                  </Button>
-                </CreateBundleForm>
+                <PermissionGuard permission={PERMISSIONS.BUNDLE_CREATE}>
+                  <CreateBundleForm
+                    title="Create MCP Bundle"
+                    availableConfigurations={configurations.map((config) => ({
+                      id: config.id,
+                      name: config.name,
+                      icon: config.mcp_server?.logo || undefined,
+                    }))}
+                    onSubmit={async (values) => {
+                      await createBundleMutation(values);
+                    }}
+                  >
+                    <Button
+                      variant="default"
+                      disabled={isConfigsLoading || !canCreate}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Bundle
+                    </Button>
+                  </CreateBundleForm>
+                </PermissionGuard>
               </div>
             </CardContent>
           </Card>

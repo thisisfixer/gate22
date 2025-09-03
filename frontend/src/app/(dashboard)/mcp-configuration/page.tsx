@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -31,14 +31,29 @@ import {
   useDeleteMCPServerConfiguration,
 } from "@/features/mcp/hooks/use-mcp-servers";
 import { MCPServerConfigurationPublicBasic } from "@/features/mcp/types/mcp.types";
+import { PermissionGuard } from "@/components/rbac/permission-guard";
+import { PERMISSIONS } from "@/lib/rbac/permissions";
+import { usePermission } from "@/hooks/use-permissions";
+import { Shield } from "lucide-react";
 
 const columnHelper = createColumnHelper<MCPServerConfigurationPublicBasic>();
 
 export default function MCPConfigurationPage() {
   const router = useRouter();
+  const canViewConfigurations = usePermission(
+    PERMISSIONS.MCP_CONFIGURATION_PAGE_VIEW,
+  );
   const { data: configurationsResponse, isLoading } =
     useMCPServerConfigurations({ limit: 100 });
   const deleteConfiguration = useDeleteMCPServerConfiguration();
+
+  // Redirect members who don't have permission
+  useEffect(() => {
+    if (!isLoading && !canViewConfigurations) {
+      router.push("/mcp-servers");
+      toast.error("You don't have permission to view configurations");
+    }
+  }, [isLoading, canViewConfigurations, router]);
 
   const handleDelete = useCallback(
     async (configurationId: string, serverName: string) => {
@@ -180,41 +195,47 @@ export default function MCPConfigurationPage() {
                   </Tooltip>
                 </TooltipProvider>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete the configuration for{" "}
-                        {configuration.mcp_server.name}? This action cannot be
-                        undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() =>
-                          handleDelete(
-                            configuration.id,
-                            configuration.mcp_server.name,
-                          )
-                        }
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                <PermissionGuard
+                  permission={PERMISSIONS.MCP_CONFIGURATION_DELETE}
+                >
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
                       >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Delete Configuration
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete the configuration for{" "}
+                          {configuration.mcp_server.name}? This action cannot be
+                          undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() =>
+                            handleDelete(
+                              configuration.id,
+                              configuration.mcp_server.name,
+                            )
+                          }
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </PermissionGuard>
               </div>
             );
           },
@@ -222,6 +243,20 @@ export default function MCPConfigurationPage() {
         }),
       ] as ColumnDef<MCPServerConfigurationPublicBasic>[];
     }, [handleDelete, router]);
+
+  // Show permission denied message for members
+  if (!canViewConfigurations) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <Shield className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold mb-2">Access Restricted</h3>
+        <p className="text-muted-foreground max-w-md">
+          You don&apos;t have permission to manage MCP server configurations.
+          Please contact your administrator for access.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>
