@@ -1,17 +1,21 @@
 import { ConnectedAccount } from "@/features/connected-accounts/types/connectedaccount.types";
 import { getApiBaseUrl } from "@/lib/api-client";
+import { CONTROL_PLANE_PATH } from "@/config/api.constants";
 
 export async function getAllConnectedAccounts(
   accessToken: string,
 ): Promise<ConnectedAccount[]> {
   const baseUrl = getApiBaseUrl();
   // Fetch with a large limit to get all accounts
-  const response = await fetch(`${baseUrl}/v1/connected-accounts?limit=100`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/connected-accounts?limit=100`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -38,14 +42,17 @@ export async function createOAuth2ConnectedAccount(
   accessToken: string,
 ): Promise<OAuth2ConnectedAccountResponse> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/connected-accounts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/connected-accounts`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(request),
     },
-    body: JSON.stringify(request),
-  });
+  );
 
   if (!response.ok) {
     let errorMsg = `Failed to create connected account: ${response.status} ${response.statusText}`;
@@ -72,7 +79,7 @@ export async function getAppConnectedAccounts(
 
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/connected-accounts?${params.toString()}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/connected-accounts?${params.toString()}`,
     {
       method: "GET",
     },
@@ -94,17 +101,20 @@ export async function createAPIConnectedAccount(
   connectedAPIKey: string,
 ): Promise<ConnectedAccount> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/linked-accounts/api-key`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/linked-accounts/api-key`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        app_name: appName,
+        linked_account_owner_id: connectedAccountOwnerId,
+        api_key: connectedAPIKey,
+      }),
     },
-    body: JSON.stringify({
-      app_name: appName,
-      linked_account_owner_id: connectedAccountOwnerId,
-      api_key: connectedAPIKey,
-    }),
-  });
+  );
 
   if (!response.ok) {
     let errorMsg = `Failed to create connected account: ${response.status} ${response.statusText}`;
@@ -128,16 +138,19 @@ export async function createNoAuthConnectedAccount(
   connectedAccountOwnerId: string,
 ): Promise<ConnectedAccount> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/linked-accounts/no-auth`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/linked-accounts/no-auth`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        app_name: appName,
+        linked_account_owner_id: connectedAccountOwnerId,
+      }),
     },
-    body: JSON.stringify({
-      app_name: appName,
-      linked_account_owner_id: connectedAccountOwnerId,
-    }),
-  });
+  );
 
   if (!response.ok) {
     let errorMsg = `Failed to create no auth connected account: ${response.status} ${response.statusText}`;
@@ -170,7 +183,7 @@ export async function getOauth2LinkURL(
 
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/linked-accounts/oauth2?${params.toString()}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/linked-accounts/oauth2?${params.toString()}`,
     {
       method: "GET",
       headers: {
@@ -205,7 +218,7 @@ export async function deleteConnectedAccount(
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/connected-accounts/${connectedAccountId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/connected-accounts/${connectedAccountId}`,
     {
       method: "DELETE",
       headers: {
@@ -227,7 +240,7 @@ export async function updateConnectedAccount(
 ): Promise<ConnectedAccount> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/linked-accounts/${connectedAccountId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/linked-accounts/${connectedAccountId}`,
     {
       method: "PATCH",
       headers: {

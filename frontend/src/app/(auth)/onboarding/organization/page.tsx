@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { tokenManager } from "@/lib/token-manager";
 import { getProfile } from "@/features/auth/api/auth";
 import { OrganizationRole } from "@/features/settings/types/organization.types";
+import { CONTROL_PLANE_PATH } from "@/config/api.constants";
 
 export default function CreateOrganizationPage() {
   const router = useRouter();
@@ -57,23 +58,30 @@ export default function CreateOrganizationPage() {
 
       const baseUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${baseUrl}/v1/organizations/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      const response = await fetch(
+        `${baseUrl}${CONTROL_PLANE_PATH}/organizations/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name,
+          }),
         },
-        body: JSON.stringify({
-          name,
-        }),
-      });
+      );
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error("API Error:", response.status, errorData);
-        throw new Error(
-          `Failed to create organization: ${response.statusText}`,
-        );
+        let errorMessage = response.statusText;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch {
+          // If parsing JSON fails, fall back to statusText
+        }
+        console.error("API Error:", response.status, errorMessage);
+        throw new Error(errorMessage);
       }
 
       const createdOrg = await response.json();

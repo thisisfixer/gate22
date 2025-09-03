@@ -12,11 +12,12 @@ import {
   PaginationParams,
   PaginationResponse,
 } from "../types/mcp.types";
+import { CONTROL_PLANE_PATH } from "@/config/api.constants";
 
 const API_ENDPOINTS = {
-  SERVERS: "/v1/mcp-servers",
-  CONFIGURATIONS: "/v1/mcp-server-configurations",
-  TOOLS: "/v1/mcp-tools",
+  SERVERS: `${CONTROL_PLANE_PATH}/mcp-servers`,
+  CONFIGURATIONS: `${CONTROL_PLANE_PATH}/mcp-server-configurations`,
+  TOOLS: `${CONTROL_PLANE_PATH}/mcp-tools`,
 };
 
 export const mcpService = {

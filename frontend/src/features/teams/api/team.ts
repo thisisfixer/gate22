@@ -1,17 +1,21 @@
 import { Team, TeamMember, CreateTeamRequest } from "../types/team.types";
 import { getApiBaseUrl } from "@/lib/api-client";
 import { throwApiError } from "@/lib/api-error-handler";
+import { CONTROL_PLANE_PATH } from "@/config/api.constants";
 
 export async function listTeams(
   accessToken: string,
   orgId: string,
 ): Promise<Team[]> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/teams`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     await throwApiError(response, "Failed to fetch teams");
@@ -27,7 +31,7 @@ export async function getTeam(
 ): Promise<Team> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams/${teamId}`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -48,14 +52,17 @@ export async function createTeam(
   data: CreateTeamRequest,
 ): Promise<Team> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/teams`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
     },
-    body: JSON.stringify(data),
-  });
+  );
 
   if (!response.ok) {
     await throwApiError(response, "Failed to create team");
@@ -71,7 +78,7 @@ export async function deleteTeam(
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams/${teamId}`,
     {
       method: "DELETE",
       headers: {
@@ -92,7 +99,7 @@ export async function listTeamMembers(
 ): Promise<TeamMember[]> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}/members`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams/${teamId}/members`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -115,7 +122,7 @@ export async function addTeamMember(
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}/members/${userId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams/${teamId}/members/${userId}`,
     {
       method: "PUT",
       headers: {
@@ -137,7 +144,7 @@ export async function removeTeamMember(
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/organizations/${orgId}/teams/${teamId}/members/${userId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/teams/${teamId}/members/${userId}`,
     {
       method: "DELETE",
       headers: {

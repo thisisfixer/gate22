@@ -1,17 +1,21 @@
 import { OrganizationUser } from "@/features/settings/types/organization.types";
 import { getApiBaseUrl } from "@/lib/api-client";
 import { throwApiError } from "@/lib/api-error-handler";
+import { CONTROL_PLANE_PATH } from "@/config/api.constants";
 
 export async function listOrganizationUsers(
   accessToken: string,
   orgId: string,
 ): Promise<OrganizationUser[]> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/members`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/members`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     await throwApiError(response, "Failed to fetch organization users");
@@ -45,14 +49,17 @@ export async function inviteToOrganization(
   role: string,
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/organizations/${orgId}/invite`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/invite`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, role }),
     },
-    body: JSON.stringify({ email, role }),
-  });
+  );
 
   if (!response.ok) {
     await throwApiError(response, "Failed to invite user to organization");
@@ -66,7 +73,7 @@ export async function removeUser(
 ): Promise<void> {
   const baseUrl = getApiBaseUrl();
   const response = await fetch(
-    `${baseUrl}/v1/organizations/${orgId}/members/${userId}`,
+    `${baseUrl}${CONTROL_PLANE_PATH}/organizations/${orgId}/members/${userId}`,
     {
       method: "DELETE",
       headers: {
