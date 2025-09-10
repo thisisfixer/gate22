@@ -282,6 +282,28 @@ async def delete_mcp_server_configuration(
             context.db_session, mcp_server_configuration_id
         )
 
+        # Remove all ConnectedAccount under this MCP server configuration
+        crud.connected_accounts.delete_connected_accounts_by_mcp_server_configuration_id(
+            db_session=context.db_session,
+            mcp_server_configuration_id=mcp_server_configuration_id,
+        )
+
+        # Remove the MCP server configuration from all MCPServerBundle in the organization
+        mcp_server_bundles = crud.mcp_server_bundles.get_mcp_server_bundles_by_organization_id_and_contains_mcp_server_configuration_id(  # noqa: E501
+            db_session=context.db_session,
+            organization_id=mcp_server_configuration.organization_id,
+            mcp_server_configuration_id=mcp_server_configuration_id,
+        )
+        for mcp_server_bundle in mcp_server_bundles:
+            updated_config_ids = list(dict.fromkeys(mcp_server_bundle.mcp_server_configuration_ids))
+            updated_config_ids.remove(mcp_server_configuration_id)
+
+            crud.mcp_server_bundles.update_mcp_server_bundle_configuration_ids(
+                db_session=context.db_session,
+                mcp_server_bundle_id=mcp_server_bundle.id,
+                update_mcp_server_bundle_configuration_ids=updated_config_ids,
+            )
+
         context.db_session.commit()
     else:
         raise HTTPException(
