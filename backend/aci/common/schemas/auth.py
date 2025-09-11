@@ -1,5 +1,4 @@
 import re
-from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -20,11 +19,6 @@ class JWTPayload(BaseModel):
     name: str
     email: str
     act_as: ActAsInfo | None
-
-
-class AuthOperation(Enum):
-    REGISTER = "register"
-    LOGIN = "login"
 
 
 class OAuth2State(BaseModel):
