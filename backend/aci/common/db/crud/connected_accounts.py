@@ -1,9 +1,11 @@
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import and_
 
 from aci.common.db.sql_models import ConnectedAccount, MCPServerConfiguration
+from aci.common.enums import ConnectedAccountOwnership
 from aci.common.logging_setup import get_logger
 
 logger = get_logger(__name__)
@@ -69,11 +71,13 @@ def create_connected_account(
     user_id: UUID,
     mcp_server_configuration_id: UUID,
     auth_credentials: dict,
+    ownership: ConnectedAccountOwnership,
 ) -> ConnectedAccount:
     connected_account = ConnectedAccount(
         user_id=user_id,
         mcp_server_configuration_id=mcp_server_configuration_id,
         auth_credentials=auth_credentials,
+        ownership=ownership,
     )
 
     db_session.add(connected_account)
@@ -98,6 +102,52 @@ def get_connected_accounts_by_user_id_and_organization_id(
         )
         .order_by(ConnectedAccount.created_at.desc())
     )
+    if offset is not None:
+        statement = statement.offset(offset)
+    if limit is not None:
+        statement = statement.limit(limit)
+
+    return list(db_session.execute(statement).scalars().all())
+
+
+def get_org_member_accessible_connected_accounts_by_mcp_server_configuration_ids(
+    db_session: Session,
+    user_id: UUID,
+    user_accessible_mcp_server_configuration_ids: list[UUID],
+    offset: int | None = None,
+    limit: int | None = None,
+) -> list[ConnectedAccount]:
+    """
+    Get accessible connected accounts to a organization member.
+
+    Returns:
+        List of connected accounts meeting one of following criteria:
+        - The individual connected accounts owned by the member itself
+        - The shared connected accounts under MCPServerConfigurations that the user has access to
+    """
+    if len(user_accessible_mcp_server_configuration_ids) == 0:
+        return []
+
+    statement = (
+        select(ConnectedAccount)
+        .join(ConnectedAccount.mcp_server_configuration)
+        .where(
+            and_(
+                ConnectedAccount.mcp_server_configuration_id.in_(
+                    user_accessible_mcp_server_configuration_ids
+                ),
+                or_(
+                    and_(
+                        ConnectedAccount.ownership == ConnectedAccountOwnership.INDIVIDUAL,
+                        ConnectedAccount.user_id == user_id,
+                    ),
+                    ConnectedAccount.ownership == ConnectedAccountOwnership.SHARED,
+                ),
+            )
+        )
+        .order_by(ConnectedAccount.created_at.desc())
+    )
+
     if offset is not None:
         statement = statement.offset(offset)
     if limit is not None:

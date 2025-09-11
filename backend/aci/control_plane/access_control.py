@@ -53,13 +53,14 @@ def check_mcp_server_config_accessibility(
 ) -> bool:
     """
     Returns:
-        Whether the user has access to a MCP server configuration.
+        Whether the organization member has access to a MCP server configuration.
         Current rule:
-        - True if user belongs to any team that is allowed by the MCP server configuration
+        - True if the organization member belongs to any team that is allowed by the MCP server
+        configuration
         - False otherwise
     """
     logger.debug(
-        f"Checking if User {user_id} has access to the MCPServerConfiguration {mcp_server_configuration_id}"  # noqa: E501
+        f"Checking if User {user_id} has access to the MCPServerConfiguration {mcp_server_configuration_id} as member"  # noqa: E501
     )
 
     mcp_server_configuration = crud.mcp_server_configurations.get_mcp_server_configuration_by_id(

@@ -18,7 +18,7 @@ from aci.common.db.sql_models import (
     Team,
     User,
 )
-from aci.common.enums import OrganizationRole, UserIdentityProvider
+from aci.common.enums import ConnectedAccountOwnership, OrganizationRole, UserIdentityProvider
 from aci.common.logging_setup import get_logger
 from aci.common.schemas.auth import ActAsInfo
 from aci.common.schemas.mcp_server_bundle import MCPServerBundleCreate
@@ -41,6 +41,7 @@ test_jwt_access_token_expire_minutes = config.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 dummy_mcp_servers_to_be_inserted = helper.prepare_mcp_servers()
 DUMMY_MCP_SERVER_NAME_NOTION = "NOTION"
 DUMMY_MCP_SERVER_NAME_GITHUB = "GITHUB"
+DUMMY_MCP_SERVER_NAME_GMAIL = "GMAIL"
 
 
 @pytest.fixture(scope="function")
@@ -356,12 +357,22 @@ def dummy_mcp_server_configurations(
                 description=f"Dummy MCP Server Configuration {dummy_mcp_server.name} Description",
                 mcp_server_id=dummy_mcp_server.id,
                 auth_type=dummy_mcp_server.auth_configs[0]["type"],
+                connected_account_ownership=ConnectedAccountOwnership.INDIVIDUAL,
                 all_tools_enabled=True,
                 enabled_tools=[],
                 allowed_teams=[dummy_team.id],
             ),
         )
+
+        # set GMAIL configuration to shared for testing.
+        if dummy_mcp_server.name == DUMMY_MCP_SERVER_NAME_GMAIL:
+            dummy_mcp_server_configuration.connected_account_ownership = (
+                ConnectedAccountOwnership.SHARED
+            )
+            db_session.commit()
+
         dummy_mcp_server_configurations.append(dummy_mcp_server_configuration)
+
     return dummy_mcp_server_configurations
 
 
@@ -406,6 +417,20 @@ def dummy_mcp_server_configuration_github(
     return dummy_mcp_server_configuration
 
 
+@pytest.fixture(scope="function")
+def dummy_mcp_server_configuration_gmail_shared(
+    dummy_mcp_server_configurations: list[MCPServerConfiguration],
+) -> MCPServerConfiguration:
+    dummy_mcp_server_configuration = next(
+        dummy_mcp_server_configuration
+        for dummy_mcp_server_configuration in dummy_mcp_server_configurations
+        if dummy_mcp_server_configuration.connected_account_ownership
+        == ConnectedAccountOwnership.SHARED
+    )
+    assert dummy_mcp_server_configuration is not None
+    return dummy_mcp_server_configuration
+
+
 # ------------------------------------------------------------
 #
 # Dummy Connected Accounts
@@ -420,12 +445,14 @@ def dummy_connected_accounts(
     dummy_another_org_member: User,
     dummy_mcp_server_configuration_github: MCPServerConfiguration,
     dummy_mcp_server_configuration_notion: MCPServerConfiguration,
+    dummy_mcp_server_configuration_gmail_shared: MCPServerConfiguration,
 ) -> list[ConnectedAccount]:
     """
     Test settings:
     - dummy_user connected to dummy_mcp_server_configuration_github
     - dummy_user connected to dummy_mcp_server_configuration_notion
     - dummy_another_org_member connected to dummy_mcp_server_configuration_github
+    - dummy_another_org_member connected to dummy_mcp_server_configuration_shared as shared account
     """
 
     connected_accounts = []
@@ -436,6 +463,7 @@ def dummy_connected_accounts(
             user_id=dummy_user.id,
             mcp_server_configuration_id=dummy_mcp_server_configuration_github.id,
             auth_credentials={},
+            ownership=ConnectedAccountOwnership.INDIVIDUAL,
         )
     )
     connected_accounts.append(
@@ -444,6 +472,7 @@ def dummy_connected_accounts(
             user_id=dummy_user.id,
             mcp_server_configuration_id=dummy_mcp_server_configuration_notion.id,
             auth_credentials={},
+            ownership=ConnectedAccountOwnership.INDIVIDUAL,
         )
     )
     connected_accounts.append(
@@ -452,6 +481,16 @@ def dummy_connected_accounts(
             user_id=dummy_another_org_member.id,
             mcp_server_configuration_id=dummy_mcp_server_configuration_github.id,
             auth_credentials={},
+            ownership=ConnectedAccountOwnership.INDIVIDUAL,
+        )
+    )
+    connected_accounts.append(
+        crud.connected_accounts.create_connected_account(
+            db_session=db_session,
+            user_id=dummy_another_org_member.id,
+            mcp_server_configuration_id=dummy_mcp_server_configuration_gmail_shared.id,
+            auth_credentials={},
+            ownership=ConnectedAccountOwnership.SHARED,
         )
     )
     return connected_accounts
