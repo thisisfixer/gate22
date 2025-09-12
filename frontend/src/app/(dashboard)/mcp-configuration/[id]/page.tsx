@@ -36,6 +36,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { getAuthTypeLabel, getAuthTypeDetailedInfo } from "@/utils/auth-labels";
+import {
+  getConfigurationTypeDetailedInfo,
+  getOwnershipLabel,
+} from "@/utils/configuration-labels";
+import { ConnectedAccountOwnership } from "@/features/mcp/types/mcp.types";
 
 export default function MCPConfigurationDetailPage() {
   const params = useParams();
@@ -290,7 +295,36 @@ export default function MCPConfigurationDetailPage() {
           </div>
         </CardHeader>
         <CardContent className="border-t pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Connected Account Type
+              </label>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm font-medium">
+                  {getOwnershipLabel(configuration.connected_account_ownership)}
+                </p>
+                {configuration.connected_account_ownership && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle
+                        className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label="Connected account type information"
+                        tabIndex={0}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>
+                        {getConfigurationTypeDetailedInfo(
+                          configuration.connected_account_ownership as ConnectedAccountOwnership,
+                        )}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+
             <div>
               <label className="text-sm font-medium text-muted-foreground">
                 Authentication Type
@@ -301,7 +335,11 @@ export default function MCPConfigurationDetailPage() {
                 </p>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help" />
+                    <HelpCircle
+                      className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label="Authentication type information"
+                      tabIndex={0}
+                    />
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p>{getAuthTypeDetailedInfo(configuration.auth_type)}</p>

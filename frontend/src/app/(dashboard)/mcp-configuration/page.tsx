@@ -19,6 +19,9 @@ import { PERMISSIONS } from "@/lib/rbac/permissions";
 import { usePermission } from "@/hooks/use-permissions";
 import { Shield } from "lucide-react";
 import { DeleteConfigurationDialog } from "@/features/mcp/components/delete-configuration-dialog";
+import { Badge } from "@/components/ui/badge";
+import { ConnectedAccountOwnership } from "@/features/mcp/types/mcp.types";
+import { getOwnershipLabel } from "@/utils/configuration-labels";
 
 const columnHelper = createColumnHelper<MCPServerConfigurationPublicBasic>();
 
@@ -67,55 +70,19 @@ export default function MCPConfigurationPage() {
   const columns: ColumnDef<MCPServerConfigurationPublicBasic>[] =
     useMemo(() => {
       return [
-        columnHelper.accessor("id", {
-          id: "configuration_id",
-          header: () => (
-            <div className="flex items-center justify-start">
-              <span className="text-left font-normal">CONFIGURATION ID</span>
-            </div>
-          ),
-          cell: (info) => {
-            const id = info.getValue();
-            return (
-              <div className="font-mono text-xs text-muted-foreground">
-                {id}
-              </div>
-            );
-          },
-          enableGlobalFilter: true,
-        }),
-
         columnHelper.accessor("name", {
           id: "configuration_name",
-          header: () => (
-            <div className="flex items-center justify-start">
-              <span className="text-left font-normal">CONFIGURATION NAME</span>
-            </div>
-          ),
+          header: () => "CONFIGURATION NAME",
           cell: (info) => {
             const name = info.getValue();
-            const description = info.row.original.description;
-            return (
-              <div className="flex flex-col">
-                <div className="font-medium">{name}</div>
-                {description && (
-                  <div className="text-xs text-muted-foreground">
-                    {description}
-                  </div>
-                )}
-              </div>
-            );
+            return <div className="font-medium">{name}</div>;
           },
           enableGlobalFilter: true,
         }),
 
         columnHelper.accessor((row) => row.mcp_server?.name, {
           id: "mcp_server_name",
-          header: () => (
-            <div className="flex items-center justify-start">
-              <span className="text-left font-normal">MCP SERVER</span>
-            </div>
-          ),
+          header: () => "MCP SERVER",
           cell: (info) => {
             const name = info.getValue();
             const logo = info.row.original.mcp_server?.logo;
@@ -138,26 +105,35 @@ export default function MCPConfigurationPage() {
           enableGlobalFilter: true,
         }),
 
+        columnHelper.accessor("connected_account_ownership", {
+          id: "configuration_type",
+          header: () => "TYPE",
+          cell: (info) => {
+            const type = info.getValue() as ConnectedAccountOwnership;
+            if (!type) return null;
+
+            return <Badge variant="outline">{getOwnershipLabel(type)}</Badge>;
+          },
+          enableGlobalFilter: true,
+        }),
+
         columnHelper.accessor("created_at", {
           id: "created_at",
           header: ({ column }) => (
-            <div className="flex items-center justify-start">
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  column.toggleSorting(column.getIsSorted() === "asc")
-                }
-                className="p-0 h-auto text-left font-normal bg-transparent hover:bg-transparent focus:ring-0"
-              >
-                CREATED
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
+            <button
+              onClick={() =>
+                column.toggleSorting(column.getIsSorted() === "asc")
+              }
+              className="flex items-center gap-1 hover:text-foreground/80 transition-colors"
+            >
+              <span>CREATED</span>
+              <ArrowUpDown className="h-4 w-4" />
+            </button>
           ),
           cell: (info) => {
             const dateString = info.getValue();
             return (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-sm">
                 {dateString ? formatToLocalTime(dateString) : "-"}
               </div>
             );
@@ -167,11 +143,7 @@ export default function MCPConfigurationPage() {
 
         columnHelper.accessor((row) => row, {
           id: "actions",
-          header: () => (
-            <div className="flex items-center justify-end">
-              <span className="text-left font-normal">ACTIONS</span>
-            </div>
-          ),
+          header: () => <div className="flex justify-end">ACTIONS</div>,
           cell: (info) => {
             const configuration = info.getValue();
             return (
