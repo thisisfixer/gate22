@@ -17,12 +17,28 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Loader2, AlertCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  ChevronRight,
+  ChevronLeft,
+  HelpCircle,
+} from "lucide-react";
 import { ConnectedAccount } from "../types/connectedaccount.types";
 import { toast } from "sonner";
 import { listTeams } from "@/features/teams/api/team";
 import { useMetaInfo } from "@/components/context/metainfo";
 import { Team } from "@/features/teams/types/team.types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  getAuthTypeDetailedInfo,
+  getAuthTypeLabel,
+  getAuthTypeDescription,
+} from "@/utils/auth-labels";
 
 interface ConnectedAccountConfigurationStepperProps {
   isOpen: boolean;
@@ -149,13 +165,8 @@ export function ConnectedAccountConfigurationStepper({
             authCredentials.clientId.trim() !== "" &&
             authCredentials.clientSecret.trim() !== ""
           );
-        } else if (securityScheme === "apikey") {
+        } else if (securityScheme === "api_key") {
           return authCredentials.apiKey.trim() !== "";
-        } else if (securityScheme === "basic") {
-          return (
-            authCredentials.username.trim() !== "" &&
-            authCredentials.password.trim() !== ""
-          );
         }
         return true;
       default:
@@ -242,43 +253,60 @@ export function ConnectedAccountConfigurationStepper({
                           <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
                             <RadioGroupItem value="oauth2" id="oauth2" />
                             <div className="flex-1">
-                              <Label
-                                htmlFor="oauth2"
-                                className="font-medium cursor-pointer"
-                              >
-                                OAuth 2.0
-                              </Label>
+                              <div className="flex items-center gap-2">
+                                <Label
+                                  htmlFor="oauth2"
+                                  className="font-medium cursor-pointer"
+                                >
+                                  {getAuthTypeLabel("oauth2")}
+                                </Label>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center rounded-sm hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                                      aria-label="More information about OAuth 2.0 authentication"
+                                    >
+                                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-xs">
+                                    <p>{getAuthTypeDetailedInfo("oauth2")}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
                               <p className="text-sm text-muted-foreground mt-1">
-                                Connect using OAuth 2.0 flow with client
-                                credentials
+                                {getAuthTypeDescription("oauth2")}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                            <RadioGroupItem value="apikey" id="apikey" />
+                            <RadioGroupItem value="api_key" id="api_key" />
                             <div className="flex-1">
-                              <Label
-                                htmlFor="apikey"
-                                className="font-medium cursor-pointer"
-                              >
-                                API Key
-                              </Label>
+                              <div className="flex items-center gap-2">
+                                <Label
+                                  htmlFor="api_key"
+                                  className="font-medium cursor-pointer"
+                                >
+                                  {getAuthTypeLabel("api_key")}
+                                </Label>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center rounded-sm hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                                      aria-label="More information about API Key authentication"
+                                    >
+                                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-xs">
+                                    <p>{getAuthTypeDetailedInfo("api_key")}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
                               <p className="text-sm text-muted-foreground mt-1">
-                                Authenticate using an API key
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                            <RadioGroupItem value="basic" id="basic" />
-                            <div className="flex-1">
-                              <Label
-                                htmlFor="basic"
-                                className="font-medium cursor-pointer"
-                              >
-                                Basic Auth
-                              </Label>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Authenticate using username and password
+                                {getAuthTypeDescription("api_key")}
                               </p>
                             </div>
                           </div>
@@ -442,7 +470,7 @@ export function ConnectedAccountConfigurationStepper({
                         </div>
                       )}
 
-                      {securityScheme === "apikey" && (
+                      {securityScheme === "api_key" && (
                         <div className="space-y-2">
                           <Label htmlFor="api-key">API Key</Label>
                           <Input
@@ -460,41 +488,6 @@ export function ConnectedAccountConfigurationStepper({
                           <p className="text-sm text-muted-foreground">
                             Your API key will be securely stored and encrypted
                           </p>
-                        </div>
-                      )}
-
-                      {securityScheme === "basic" && (
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="username">Username</Label>
-                            <Input
-                              id="username"
-                              type="text"
-                              placeholder="Enter your username"
-                              value={authCredentials.username}
-                              onChange={(e) =>
-                                setAuthCredentials({
-                                  ...authCredentials,
-                                  username: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="password">Password</Label>
-                            <Input
-                              id="password"
-                              type="password"
-                              placeholder="Enter your password"
-                              value={authCredentials.password}
-                              onChange={(e) =>
-                                setAuthCredentials({
-                                  ...authCredentials,
-                                  password: e.target.value,
-                                })
-                              }
-                            />
-                          </div>
                         </div>
                       )}
 
