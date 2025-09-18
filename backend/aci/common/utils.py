@@ -1,6 +1,8 @@
 import datetime
 import os
+import random
 import re
+import string
 from functools import cache
 from uuid import UUID
 
@@ -134,3 +136,14 @@ def sign_token(
         jwt_payload.model_dump(mode="json"), jwt_signing_key, algorithm=jwt_algorithm
     )
     return token
+
+
+def generate_alphanumeric_string(
+    length: int, character_pool: str = string.ascii_letters + string.digits
+) -> str:
+    """
+    Generate a random alphanumeric string of a given length.
+    Convenient to call with customized `character_pool`, examples:
+        "ABCDE" / string.digits + string.ascii_uppercase / string.ascii_letters
+    """
+    return "".join(random.choices(character_pool, k=length))
