@@ -27,6 +27,7 @@ from aci.common.enums import (
     OrganizationRole,
     TeamRole,
     UserIdentityProvider,
+    UserVerificationType,
 )
 
 EMBEDDING_DIMENSION = 1024
@@ -106,6 +107,35 @@ class UserRefreshToken(Base):
         DateTime(timezone=True), nullable=True, init=False
     )
     user: Mapped[User] = relationship(back_populates="refresh_tokens", init=False)
+
+
+class UserVerification(Base):
+    __tablename__ = "user_verifications"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default_factory=uuid4, init=False
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[UserVerificationType] = mapped_column(
+        SQLEnum(UserVerificationType, native_enum=False, length=MAX_ENUM_LENGTH), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(
+        String(MAX_STRING_LENGTH), unique=True, nullable=False
+    )  # HMAC-SHA256(secret, token)
+    email_metadata: Mapped[dict | None] = mapped_column(
+        JSONB, nullable=True
+    )  # email provider, send time, reference id
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, init=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, init=False
+    )
+
+    # No relationship needed - only using user_id foreign key directly
 
 
 class Organization(Base):

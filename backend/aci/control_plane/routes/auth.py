@@ -2,7 +2,7 @@ import datetime
 import hashlib
 import hmac
 import secrets
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from uuid import UUID
 
@@ -15,7 +15,12 @@ from starlette.responses import RedirectResponse
 
 from aci.common import utils
 from aci.common.db import crud
-from aci.common.enums import OrganizationRole, UserIdentityProvider
+from aci.common.db.sql_models import User, UserVerification
+from aci.common.enums import (
+    OrganizationRole,
+    UserIdentityProvider,
+    UserVerificationType,
+)
 from aci.common.logging_setup import get_logger
 from aci.common.schemas.auth import (
     ActAsInfo,
@@ -27,14 +32,38 @@ from aci.common.schemas.auth import (
 )
 from aci.control_plane import config
 from aci.control_plane import dependencies as deps
-from aci.control_plane.exceptions import OAuth2Error
+from aci.control_plane import token_utils as token_utils
+from aci.control_plane.exceptions import (
+    AccountDeletionInProgressError,
+    ControlPlaneException,
+    EmailAlreadyExistsError,
+    EmailVerificationTokenExpiredError,
+    EmailVerificationTokenMismatchError,
+    EmailVerificationTokenNotFoundError,
+    InvalidEmailVerificationTokenError,
+    InvalidEmailVerificationTokenTypeError,
+    OAuth2Error,
+    ThirdPartyIdentityExistsError,
+    UserNotFoundError,
+)
 from aci.control_plane.google_login_utils import (
     exchange_google_userinfo,
     generate_google_auth_url,
 )
+from aci.control_plane.services.email_service import EmailService
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+EMAIL_VERIFICATION_ERROR_PARAMS: dict[type[ControlPlaneException], str] = {
+    InvalidEmailVerificationTokenError: "invalid_email_verification_token",
+    InvalidEmailVerificationTokenTypeError: "invalid_email_verification_token_type",
+    EmailVerificationTokenNotFoundError: "email_verification_token_not_found",
+    EmailVerificationTokenExpiredError: "email_verification_token_expired",
+    EmailVerificationTokenMismatchError: "email_verification_token_mismatch",
+    UserNotFoundError: "user_not_found",
+}
 
 
 @router.get(
@@ -129,6 +158,7 @@ async def google_callback(
             email=google_userinfo.email,
             password_hash=None,
             identity_provider=UserIdentityProvider.GOOGLE,
+            email_verified=True,
         )
 
     # Issue a refresh token, store in secure cookie
@@ -145,39 +175,23 @@ async def google_callback(
     status_code=status.HTTP_201_CREATED,
     description="""
     Register a new user using email flow. On success, it will set a refresh
-    token in the response cookie. Call /token endpoint to get a JWT token.
+    token in the response cookie and send a verification email.
+    Call /token endpoint to get a JWT token.
     """,
 )
 async def register(
     db_session: Annotated[Session, Depends(deps.yield_db_session)],
+    email_service: Annotated[EmailService, Depends(deps.get_email_service)],
     request: EmailRegistrationRequest,
     response: Response,
 ) -> None:
-    # Check if user already exists
-    user = crud.users.get_user_by_email(db_session, request.email)
-    if user:
-        if user.deleted_at is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "This account is under deletion process. "
-                    "Please contact support if you need assistance."
-                ),
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already been used"
-        )
-
-    # Hash password
-    hashed = utils.hash_user_password(request.password)
-
-    # Create user
-    user = crud.users.create_user(
+    # Use helper function to handle registration and email verification
+    user, _ = await _register_user_with_email(
         db_session=db_session,
+        email_service=email_service,
         name=request.name,
         email=request.email,
-        password_hash=hashed,
-        identity_provider=UserIdentityProvider.EMAIL,
+        password=request.password,
     )
 
     db_session.commit()
@@ -225,6 +239,13 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password"
         )
 
+    # Require email verification for email/password logins
+    if not user.email_verified and user.identity_provider == UserIdentityProvider.EMAIL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please check your inbox for the verification link.",
+        )
+
     # Update the last login time
     user.last_login_at = datetime.datetime.now(datetime.UTC)
     db_session.commit()
@@ -253,7 +274,6 @@ async def issue_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token"
         )
-    logger.info(f"Refresh token: {refresh_token}")
 
     # Check if refresh token is valid
     refresh_token_hash = _hash_refresh_token(refresh_token)
@@ -310,6 +330,60 @@ async def issue_token(
     )
 
     return TokenResponse(token=token)
+
+
+@router.get(
+    "/verify-email",
+    status_code=status.HTTP_302_FOUND,
+    description="""
+    Verify a user's email address using the token from the verification email.
+    Redirects to the frontend with success or error status.
+    """,
+)
+async def verify_email(
+    db_session: Annotated[Session, Depends(deps.yield_db_session)],
+    token: str = Query(..., description="The verification token from the email"),
+) -> RedirectResponse:
+    try:
+        # Verify the token and get verification record
+        verification, user_id = _verify_user_email(db_session, token)
+
+        # Mark verification as used
+        verification.used_at = datetime.datetime.now(datetime.UTC)
+        db_session.add(verification)
+
+        # Update user's email_verified status
+        user = crud.users.get_user_by_id(db_session, user_id)
+        if not user:
+            raise UserNotFoundError("User not found")
+
+        user.email_verified = True
+        db_session.add(user)
+
+        # Commit the transaction
+        db_session.commit()
+
+        # Redirect to frontend with success
+        success_url = f"{config.FRONTEND_URL}/auth/verify-success"
+        return RedirectResponse(success_url, status_code=status.HTTP_302_FOUND)
+    except (
+        InvalidEmailVerificationTokenError,
+        InvalidEmailVerificationTokenTypeError,
+        EmailVerificationTokenNotFoundError,
+        EmailVerificationTokenExpiredError,
+        EmailVerificationTokenMismatchError,
+        UserNotFoundError,
+    ) as e:
+        # Redirect to frontend with specific error
+        error_param = EMAIL_VERIFICATION_ERROR_PARAMS.get(type(e), "verification_failed")
+        error_url = f"{config.FRONTEND_URL}/auth/verify-error?error={error_param}"
+        return RedirectResponse(error_url, status_code=status.HTTP_302_FOUND)
+    except Exception as e:
+        # Log unexpected errors
+        logger.error(f"Unexpected error during email verification: {e!s}")
+        # Redirect to frontend with generic error
+        error_url = f"{config.FRONTEND_URL}/auth/verify-error?error=verification_failed"
+        return RedirectResponse(error_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post(
@@ -372,3 +446,145 @@ def _issue_refresh_token(db_session: Session, user_id: UUID, response: Response)
         samesite="lax",
         max_age=60 * 60 * 24 * 30,
     )
+
+
+async def _register_user_with_email(
+    db_session: Session,
+    email_service: EmailService,
+    name: str,
+    email: str,
+    password: str,
+) -> tuple[User, dict[str, Any] | None]:
+    """
+    Register a new user with email and send verification email.
+    Returns the created user and email metadata.
+    """
+    verification_type = UserVerificationType.EMAIL_VERIFICATION
+
+    # Check if user already exists
+    existing_user = crud.users.get_user_by_email(db_session, email)
+    if existing_user:
+        if existing_user.deleted_at is not None:
+            # Account is under deletion process
+            raise AccountDeletionInProgressError()
+
+        # If the existing account is a third-party identity, do not allow overriding
+        if existing_user.identity_provider != UserIdentityProvider.EMAIL:
+            raise ThirdPartyIdentityExistsError()
+
+        # If the email is already verified, treat as an existing account
+        if existing_user.email_verified:
+            raise EmailAlreadyExistsError()
+
+        # For unverified existing email accounts, update latest info and resend verification
+        existing_user.name = name
+        existing_user.password_hash = utils.hash_user_password(password)
+        db_session.add(existing_user)
+
+        # Invalidate any previous unused verification tokens for this user
+        now_ts = datetime.datetime.now(datetime.UTC)
+        crud.user_verifications.invalidate_unused_verifications(
+            db_session=db_session,
+            user_id=existing_user.id,
+            verification_type=verification_type,
+            used_at=now_ts,
+        )
+
+        user = existing_user
+    else:
+        # Create user with email_verified=false
+        password_hash = utils.hash_user_password(password)
+        user = crud.users.create_user(
+            db_session=db_session,
+            name=name,
+            email=email,
+            password_hash=password_hash,
+            identity_provider=UserIdentityProvider.EMAIL,
+            email_verified=False,
+        )
+
+    # Generate and send verification email
+    token, token_hash, expires_at = token_utils.generate_verification_token(
+        user_id=user.id,
+        email=email,
+        verification_type=verification_type.value,
+        expires_in_minutes=config.EMAIL_VERIFICATION_EXPIRE_MINUTES,
+    )
+
+    # Create verification URL
+    base_url = f"{config.CONTROL_PLANE_BASE_URL}{config.APP_ROOT_PATH}"
+    verification_url = f"{base_url}/auth/verify-email?token={token}"
+
+    # Send verification email
+    email_metadata = await email_service.send_verification_email(
+        recipient=email,
+        user_name=name,
+        verification_url=verification_url,
+    )
+
+    # Store verification record
+    crud.user_verifications.create_verification(
+        db_session=db_session,
+        user_id=user.id,
+        verification_type=verification_type,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        email_metadata=email_metadata,
+    )
+
+    return user, email_metadata
+
+
+def _verify_user_email(
+    db_session: Session,
+    token: str,
+) -> tuple[UserVerification, UUID]:
+    """
+    Verify a user's email using the verification token.
+    Returns the verification record and user_id.
+    Raises exceptions for various error conditions.
+    """
+    verification_type = UserVerificationType.EMAIL_VERIFICATION
+
+    # Validate and decode token first so malformed tokens surface the correct error.
+    try:
+        payload = token_utils.validate_token(token)
+    except jwt.ExpiredSignatureError:
+        raise EmailVerificationTokenExpiredError("The verification token has expired") from None
+    except jwt.InvalidTokenError:
+        raise InvalidEmailVerificationTokenError("The verification token is invalid") from None
+
+    if payload.get("type") != verification_type.value:
+        raise InvalidEmailVerificationTokenTypeError(
+            "The token is not a valid email verification token"
+        )
+
+    # Extract and validate user_id from payload
+    try:
+        user_id_str = payload.get("user_id")
+        if not user_id_str:
+            raise InvalidEmailVerificationTokenError("Token payload missing user_id")
+        user_id = UUID(user_id_str)
+    except ValueError:
+        raise InvalidEmailVerificationTokenError("Token payload contains invalid user_id") from None
+
+    token_hash = token_utils.hash_token(token)
+    verification = crud.user_verifications.get_unused_verification_by_token_hash(
+        db_session=db_session,
+        token_hash=token_hash,
+        verification_type=verification_type,
+    )
+
+    if not verification:
+        raise EmailVerificationTokenNotFoundError(
+            "The verification token was not found or has already been used"
+        )
+
+    current_time = datetime.datetime.now(datetime.UTC)
+    if verification.expires_at and verification.expires_at < current_time:
+        raise EmailVerificationTokenExpiredError("The verification token has expired")
+
+    if verification.user_id != user_id:
+        raise EmailVerificationTokenMismatchError("The verification token does not match the user")
+
+    return verification, user_id

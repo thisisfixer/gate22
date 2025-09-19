@@ -22,13 +22,13 @@ For VS Code users, configure Ruff formatter:
 
 ```json
 {
-    "[python]": {
-      "editor.formatOnSave": true,
-      "editor.defaultFormatter": "charliermarsh.ruff",
-      "editor.codeActionsOnSave": {
-        "source.organizeImports.ruff": "always"
-      }
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports.ruff": "always"
     }
+  }
 }
 ```
 
@@ -72,6 +72,7 @@ For VS Code users, configure Ruff formatter:
    ```
 
    This will start:
+
    - `control-plane`: Backend API service
    - `runner`: Container for running commands like pytest, cli commands or scripts
 
@@ -92,6 +93,8 @@ For VS Code users, configure Ruff formatter:
    ```
 
 ### Running Tests
+
+Run the test suite in an ephemeral container (automatically applies migrations before executing tests):
 
 ```bash
 docker compose exec test-runner pytest
@@ -116,6 +119,7 @@ When making changes to database models:
    ```
 
 1. Manually review and edit the generated file in `database/alembic/versions/` if needed to add custom changes, e.g.,:
+
    - pgvector library imports
    - Index creation/deletion
    - Vector extension setup
