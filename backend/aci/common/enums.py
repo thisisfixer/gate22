@@ -44,3 +44,38 @@ class HttpLocation(StrEnum):
 class MCPServerTransportType(StrEnum):
     STREAMABLE_HTTP = "streamable_http"
     SSE = "sse"
+
+
+class VirtualMCPToolType(StrEnum):
+    """
+    NOTE: only used by the virtual MCP service
+    Same as the "Protocol" enum from the tool-calling platform
+    """
+
+    REST = "rest"
+    CONNECTOR = "connector"
+
+
+class HttpMethod(StrEnum):
+    """
+    NOTE: only used by the virtual MCP service
+    Same as the "HttpMethod" enum from the tool-calling platform
+    """
+
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
+    HEAD = "HEAD"
+    OPTIONS = "OPTIONS"
+
+
+class MCPToolSchemaFormat(StrEnum):
+    """
+    format for a MCP tool schema.
+    """
+
+    OPENAI = "openai"  # for openai chat completions API
+    ANTHROPIC = "anthropic"  # for anthropic chat completions API
+    OPENAI_RESPONSES = "openai_responses"  # for openai responses API

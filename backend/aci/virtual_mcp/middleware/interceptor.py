@@ -7,8 +7,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from aci.common.logging_setup import get_logger
-from aci.mcp import config
-from aci.mcp.context import request_id_ctx_var
+from aci.virtual_mcp import config
+from aci.virtual_mcp.context import request_id_ctx_var
 
 logger = get_logger(__name__)
 
