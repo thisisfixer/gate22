@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from aci.common.db import crud
@@ -17,6 +17,7 @@ from aci.common.schemas.mcp_server_configuration import (
 from aci.common.schemas.pagination import PaginationParams, PaginationResponse
 from aci.control_plane import access_control, schema_utils
 from aci.control_plane import dependencies as deps
+from aci.control_plane.exceptions import NotPermittedError
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -43,6 +44,11 @@ async def create_mcp_server_configuration(
         mcp_server_id=body.mcp_server_id,
         throw_error_if_not_permitted=True,
     )
+
+    if body.connected_account_ownership == ConnectedAccountOwnership.OPERATIONAL:
+        raise NotPermittedError(
+            message="Cannot create a MCPServerConfiguration of operational type"
+        )
 
     mcp_server = crud.mcp_servers.get_mcp_server_by_id(
         context.db_session, body.mcp_server_id, throw_error_if_not_found=False
@@ -80,7 +86,22 @@ async def create_mcp_server_configuration(
 async def list_mcp_server_configurations(
     context: Annotated[deps.RequestContext, Depends(deps.get_request_context)],
     pagination_params: Annotated[PaginationParams, Depends()],
+    mcp_server_id: Annotated[UUID | None, Query()] = None,
+    connected_account_ownerships: Annotated[
+        list[ConnectedAccountOwnership] | None,
+        Query(
+            description="For normal usage do not need to provide this parameter. "
+            "By default it will return `individual` and `shared` MCPServerConfigurations. "
+            "Provide `operational` to get Operational MCPServerConfiguration, used for checking if "
+            "an MCPServer has configured an Operational Connected Account."
+        ),
+    ] = None,
 ) -> PaginationResponse[MCPServerConfigurationPublic]:
+    if connected_account_ownerships is None:
+        connected_account_ownerships = [
+            ConnectedAccountOwnership.INDIVIDUAL,
+            ConnectedAccountOwnership.SHARED,
+        ]
     team_ids: list[UUID] | None
 
     if context.act_as.role == OrganizationRole.ADMIN:
@@ -99,6 +120,8 @@ async def list_mcp_server_configurations(
     mcp_server_configurations = crud.mcp_server_configurations.get_mcp_server_configurations(
         context.db_session,
         context.act_as.organization_id,
+        mcp_server_id=mcp_server_id,
+        connected_account_ownerships=connected_account_ownerships,
         offset=pagination_params.offset,
         limit=pagination_params.limit,
         team_ids=team_ids,
@@ -159,6 +182,14 @@ async def update_mcp_server_configuration(
     )
     if mcp_server_configuration is None:
         raise HTTPException(status_code=404, detail="MCP server configuration not found")
+
+    if (
+        mcp_server_configuration.connected_account_ownership
+        == ConnectedAccountOwnership.OPERATIONAL
+    ):
+        raise NotPermittedError(
+            message="Cannot update a MCPServerConfiguration of operational type"
+        )
 
     # Check if the MCP server configuration is under the user's org
     # Check if the user is acted as admin
@@ -287,6 +318,14 @@ async def delete_mcp_server_configuration(
             required_role=OrganizationRole.ADMIN,
             throw_error_if_not_permitted=True,
         )
+
+        if (
+            mcp_server_configuration.connected_account_ownership
+            == ConnectedAccountOwnership.OPERATIONAL
+        ):
+            raise NotPermittedError(
+                message="Cannot delete a MCPServerConfiguration of operational type"
+            )
 
         crud.mcp_server_configurations.delete_mcp_server_configuration(
             context.db_session, mcp_server_configuration_id

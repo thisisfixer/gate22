@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from aci.common.db.sql_models import MCPServerConfiguration, Team
+from aci.common.enums import ConnectedAccountOwnership
 from aci.common.schemas.mcp_server_configuration import (
     MCPServerConfigurationCreate,
     MCPServerConfigurationUpdate,
@@ -94,6 +95,9 @@ def get_mcp_server_configurations(
     db_session: Session,
     organization_id: UUID,
     team_ids: list[UUID] | None = None,  # None means no filter
+    mcp_server_id: UUID | None = None,  # None means no filter
+    connected_account_ownerships: list[ConnectedAccountOwnership]
+    | None = None,  # None means no filter
     offset: int | None = None,
     limit: int | None = None,
 ) -> list[MCPServerConfiguration]:
@@ -112,6 +116,14 @@ def get_mcp_server_configurations(
         # Make sure the field is Column of PostgreSQL array (import sqlalchemy.dialects.postgresql)
         statement = statement.where(
             MCPServerConfiguration.allowed_teams.overlap([team.id for team in teams]),
+        )
+
+    if mcp_server_id is not None:
+        statement = statement.where(MCPServerConfiguration.mcp_server_id == mcp_server_id)
+
+    if connected_account_ownerships is not None:
+        statement = statement.where(
+            MCPServerConfiguration.connected_account_ownership.in_(connected_account_ownerships),
         )
 
     statement = statement.order_by(MCPServerConfiguration.created_at.desc())

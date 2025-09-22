@@ -15,8 +15,10 @@ from aci.common.db.sql_models import (
     Team,
     User,
 )
+from aci.common.enums import ConnectedAccountOwnership
 from aci.common.logging_setup import get_logger
 from aci.common.schemas.mcp_server_configuration import (
+    MCPServerConfigurationCreate,
     MCPServerConfigurationPublic,
     MCPServerConfigurationUpdate,
 )
@@ -115,6 +117,27 @@ def test_list_mcp_server_configurations(
     else:
         # shows nothing because offset should be larger than the total test MCP server configs
         assert len(paginated_response.data) == 0
+
+
+def test_list_mcp_server_configurations_by_mcp_server_id(
+    test_client: TestClient,
+    dummy_mcp_server: MCPServer,
+    dummy_mcp_server_configurations: list[MCPServerConfiguration],
+    dummy_access_token_member: str,
+) -> None:
+    response = test_client.get(
+        f"{config.ROUTER_PREFIX_MCP_SERVER_CONFIGURATIONS}?mcp_server_id={dummy_mcp_server.id}",
+        headers={"Authorization": f"Bearer {dummy_access_token_member}"},
+    )
+
+    assert response.status_code == 200
+    paginated_response = PaginationResponse[MCPServerConfigurationPublic].model_validate(
+        response.json(),
+    )
+
+    for response_item in paginated_response.data:
+        logger.info(f"Response item: {response_item}")
+        assert response_item.mcp_server.id == dummy_mcp_server.id
 
 
 @pytest.mark.parametrize(
@@ -537,3 +560,99 @@ def test_delete_mcp_server_configuration(
     else:
         # Should not be able to delete the MCP server configuration
         assert response.status_code == 403
+
+
+class TestOperationalMCPServerConfiguration:
+    @pytest.mark.parametrize("is_operational", [True, False])
+    def test_update_operational_mcp_server_configuration(
+        self,
+        dummy_access_token_admin: str,
+        test_client: TestClient,
+        db_session: Session,
+        dummy_mcp_server_configuration: MCPServerConfiguration,
+        is_operational: bool,
+    ) -> None:
+        dummy_mcp_server_configuration.connected_account_ownership = (
+            ConnectedAccountOwnership.OPERATIONAL
+            if is_operational
+            else ConnectedAccountOwnership.SHARED
+        )
+        db_session.commit()
+
+        response = test_client.patch(
+            f"{config.ROUTER_PREFIX_MCP_SERVER_CONFIGURATIONS}/{dummy_mcp_server_configuration.id}",
+            headers={"Authorization": f"Bearer {dummy_access_token_admin}"},
+            json={"allowed_teams": []},
+        )
+
+        if is_operational:
+            assert response.status_code == 403
+            assert response.json()["error"].endswith(
+                "Cannot update a MCPServerConfiguration of operational type"
+            )
+        else:
+            assert response.status_code == 200
+
+    @pytest.mark.parametrize("is_operational", [True, False])
+    def test_delete_operational_mcp_server_configuration(
+        self,
+        dummy_access_token_admin: str,
+        test_client: TestClient,
+        db_session: Session,
+        dummy_mcp_server_configuration: MCPServerConfiguration,
+        is_operational: bool,
+    ) -> None:
+        dummy_mcp_server_configuration.connected_account_ownership = (
+            ConnectedAccountOwnership.OPERATIONAL
+            if is_operational
+            else ConnectedAccountOwnership.SHARED
+        )
+        db_session.commit()
+
+        response = test_client.delete(
+            f"{config.ROUTER_PREFIX_MCP_SERVER_CONFIGURATIONS}/{dummy_mcp_server_configuration.id}",
+            headers={"Authorization": f"Bearer {dummy_access_token_admin}"},
+        )
+
+        if is_operational:
+            assert response.status_code == 403
+            assert response.json()["error"].endswith(
+                "Cannot delete a MCPServerConfiguration of operational type"
+            )
+        else:
+            assert response.status_code == 200
+
+    @pytest.mark.parametrize("is_operational", [True, False])
+    def test_create_operational_mcp_server_configuration(
+        self,
+        dummy_access_token_admin: str,
+        test_client: TestClient,
+        db_session: Session,
+        is_operational: bool,
+        dummy_mcp_server: MCPServer,
+    ) -> None:
+        db_session.commit()
+
+        body = MCPServerConfigurationCreate(
+            name="New MCP Server Configuration",
+            description="New MCP Server Configuration Description",
+            mcp_server_id=dummy_mcp_server.id,
+            auth_type=dummy_mcp_server.auth_configs[0]["type"],
+            connected_account_ownership=ConnectedAccountOwnership.OPERATIONAL
+            if is_operational
+            else ConnectedAccountOwnership.SHARED,
+        )
+
+        response = test_client.post(
+            config.ROUTER_PREFIX_MCP_SERVER_CONFIGURATIONS,
+            headers={"Authorization": f"Bearer {dummy_access_token_admin}"},
+            json=body.model_dump(mode="json"),
+        )
+
+        if is_operational:
+            assert response.status_code == 403
+            assert response.json()["error"].endswith(
+                "Cannot create a MCPServerConfiguration of operational type"
+            )
+        else:
+            assert response.status_code == 200

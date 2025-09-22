@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, field_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, field_validator, model_validator
 
 from aci.common.enums import AuthType, MCPServerTransportType
 from aci.common.schemas.mcp_auth import AuthConfig
@@ -17,8 +17,10 @@ class MCPServerMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PublicMCPServerUpsert(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class MCPServerUpsert(BaseModel):
+    """Used for Upserting data to the database"""
+
+    model_config = ConfigDict(extra="ignore")
 
     name: str
     url: str
@@ -44,10 +46,28 @@ class PublicMCPServerUpsert(BaseModel):
         return v
 
 
-# Currently Custom MCP Server has same fields as PublicMCPServerUpsert.
-# But we should not extend PublicMCPServerUpsert in the future to avoid confusion.
-class CustomMCPServerCreate(PublicMCPServerUpsert):
+class PublicMCPServerUpsertRequest(MCPServerUpsert):
+    """Used for API schema validation"""
+
+    model_config = ConfigDict(extra="forbid")
+
     pass
+
+
+class CustomMCPServerCreateRequest(MCPServerUpsert):
+    """Used for API schema validation"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operational_account_auth_type: AuthType
+
+    @model_validator(mode="after")
+    def validate_operational_account_auth_type(self) -> "CustomMCPServerCreateRequest":
+        for auth_config in self.auth_configs:
+            if auth_config.root.type == self.operational_account_auth_type:
+                return self
+
+        raise ValueError("operational_account_auth_type must be in one of the auth_configs")
 
 
 class MCPServerEmbeddingFields(BaseModel):

@@ -8,18 +8,20 @@ from sqlalchemy.orm import Session
 
 from aci.common import embeddings, utils
 from aci.common.db import crud
-from aci.common.enums import OrganizationRole
+from aci.common.enums import ConnectedAccountOwnership, OrganizationRole
 from aci.common.logging_setup import get_logger
 from aci.common.openai_client import get_openai_client
 from aci.common.schemas.mcp_server import (
-    CustomMCPServerCreate,
+    CustomMCPServerCreateRequest,
     MCPServerEmbeddingFields,
     MCPServerOAuth2DCRRequest,
     MCPServerOAuth2DCRResponse,
     MCPServerOAuth2DiscoveryRequest,
     MCPServerOAuth2DiscoveryResponse,
     MCPServerPublic,
+    MCPServerUpsert,
 )
+from aci.common.schemas.mcp_server_configuration import MCPServerConfigurationCreate
 from aci.common.schemas.pagination import PaginationParams, PaginationResponse
 from aci.control_plane import access_control, config, schema_utils
 from aci.control_plane import dependencies as deps
@@ -107,7 +109,7 @@ def _generate_unique_mcp_server_canonical_name(
 @router.post("", response_model=MCPServerPublic)
 async def create_custom_mcp_server(
     context: Annotated[deps.RequestContext, Depends(deps.get_request_context)],
-    mcp_server_data: CustomMCPServerCreate,
+    mcp_server_data: CustomMCPServerCreateRequest,
 ) -> MCPServerPublic:
     access_control.check_act_as_organization_role(
         context.act_as, required_role=OrganizationRole.ADMIN
@@ -129,14 +131,29 @@ async def create_custom_mcp_server(
 
     mcp_server_data.name = canonical_name
 
-    mcp_server = crud.mcp_servers.create_custom_mcp_server(
+    mcp_server = crud.mcp_servers.create_mcp_server(
         context.db_session,
         organization_id=context.act_as.organization_id,
-        custom_mcp_server_upsert=mcp_server_data,
+        # `operational_account_auth_type` is not needed for the MCP server upsert
+        mcp_server_upsert=MCPServerUpsert.model_validate(mcp_server_data.model_dump()),
         embedding=mcp_server_embedding,
     )
 
-    context.db_session.commit()
+    # We would need an operational MCPServerConfiguration for each custom MCP server
+    crud.mcp_server_configurations.create_mcp_server_configuration(
+        context.db_session,
+        organization_id=context.act_as.organization_id,
+        mcp_server_configuration=MCPServerConfigurationCreate(
+            mcp_server_id=mcp_server.id,
+            name=f"Operational_Configuration_{mcp_server.name}",
+            description=f"Operational MCP Server Configuration for {mcp_server.name}",
+            auth_type=mcp_server_data.operational_account_auth_type,
+            connected_account_ownership=ConnectedAccountOwnership.OPERATIONAL,
+            all_tools_enabled=True,  # Does not matter for operational account
+            enabled_tools=[],  # Does not matter for operational account
+            allowed_teams=[],  # Does not matter for operational account
+        ),
+    )
 
     mcp_server_public = schema_utils.construct_mcp_server_public(mcp_server)
 

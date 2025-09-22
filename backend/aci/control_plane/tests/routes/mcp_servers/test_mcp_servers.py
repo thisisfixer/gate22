@@ -6,10 +6,19 @@ from sqlalchemy.orm import Session
 
 from aci.common.db import crud
 from aci.common.db.sql_models import Organization
-from aci.common.enums import AuthType, HttpLocation, MCPServerTransportType
+from aci.common.enums import (
+    AuthType,
+    ConnectedAccountOwnership,
+    HttpLocation,
+    MCPServerTransportType,
+)
 from aci.common.logging_setup import get_logger
 from aci.common.schemas.mcp_auth import APIKeyConfig, AuthConfig, NoAuthConfig
-from aci.common.schemas.mcp_server import CustomMCPServerCreate, MCPServerMetadata, MCPServerPublic
+from aci.common.schemas.mcp_server import (
+    CustomMCPServerCreateRequest,
+    MCPServerMetadata,
+    MCPServerPublic,
+)
 from aci.common.schemas.pagination import PaginationResponse
 from aci.control_plane import config
 
@@ -83,6 +92,35 @@ def test_list_mcp_servers(
         assert len(paginated_response.data) == 0
 
 
+def test_create_custom_mcp_server_with_invalid_operational_account_auth_type(
+    test_client: TestClient,
+    dummy_access_token_admin: str,
+) -> None:
+    response = test_client.post(
+        config.ROUTER_PREFIX_MCP_SERVERS,
+        headers={"Authorization": f"Bearer {dummy_access_token_admin}"},
+        json={
+            "name": "TEST_MCP_SERVER",
+            "url": "https://test-mcp-server.com",
+            "description": "Test MCP server",
+            "categories": ["test"],
+            "transport_type": MCPServerTransportType.STREAMABLE_HTTP,
+            "auth_configs": [
+                AuthConfig.model_validate(
+                    APIKeyConfig(
+                        type=AuthType.API_KEY, location=HttpLocation.HEADER, name="X-API-Key"
+                    )
+                ).model_dump(),
+            ],
+            "logo": "https://test-mcp-server.com/logo.png",
+            "server_metadata": MCPServerMetadata().model_dump(),
+            "operational_account_auth_type": AuthType.NO_AUTH.value,
+            # Invalid operational_account_auth_type (not in auth_configs)
+        },
+    )
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize(
     "access_token_fixture",
     [
@@ -101,7 +139,7 @@ def test_create_custom_mcp_server(
 ) -> None:
     access_token = request.getfixturevalue(access_token_fixture)
 
-    input_mcp_server_data = CustomMCPServerCreate(
+    input_mcp_server_data = CustomMCPServerCreateRequest(
         name="TEST_MCP_SERVER",
         url="https://test-mcp-server.com",
         description="Test MCP server",
@@ -115,6 +153,7 @@ def test_create_custom_mcp_server(
         ],
         logo="https://test-mcp-server.com/logo.png",
         server_metadata=MCPServerMetadata(),
+        operational_account_auth_type=AuthType.NO_AUTH,
     )
 
     response = test_client.post(
@@ -148,6 +187,15 @@ def test_create_custom_mcp_server(
 
     # Check if the MCP server name is generated correctly
     assert re.fullmatch(f"{input_mcp_server_data.name}_[A-Z0-9]{{8}}", db_mcp_server_data.name)
+
+    # Check if the operational MCPServerConfiguration is created
+    db_mcp_server_configuration_data = crud.mcp_server_configurations.get_mcp_server_configurations(
+        db_session,
+        organization_id=dummy_organization.id,
+        mcp_server_id=db_mcp_server_data.id,
+        connected_account_ownerships=[ConnectedAccountOwnership.OPERATIONAL],
+    )
+    assert len(db_mcp_server_configuration_data) == 1
 
 
 @pytest.mark.parametrize(
