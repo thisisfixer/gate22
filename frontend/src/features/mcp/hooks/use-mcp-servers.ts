@@ -32,9 +32,10 @@ export const mcpQueryKeys = {
 
 // Hook to list all available MCP servers
 export function useMCPServers(params?: PaginationParams) {
+  const { accessToken } = useMetaInfo();
   return useQuery({
     queryKey: mcpQueryKeys.servers.list(params),
-    queryFn: () => mcpService.servers.list(params),
+    queryFn: () => mcpService.servers.list(accessToken!, params),
   });
 }
 
@@ -51,9 +52,10 @@ export function useMCPServer(serverId: string) {
 
 // Hook to get a specific MCP server by name
 export function useMCPServerByName(serverName: string) {
+  const { accessToken } = useMetaInfo();
   return useQuery({
     queryKey: mcpQueryKeys.servers.byName(serverName),
-    queryFn: () => mcpService.servers.getByName(serverName),
+    queryFn: () => mcpService.servers.getByName(accessToken!, serverName),
     enabled: !!serverName,
   });
 }

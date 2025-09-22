@@ -1,8 +1,4 @@
-import {
-  fetcher,
-  fetcherWithAuth,
-  createAuthenticatedRequest,
-} from "@/lib/api-client";
+import { fetcherWithAuth, createAuthenticatedRequest } from "@/lib/api-client";
 import {
   MCPServerPublic,
   MCPServerConfigurationPublic,
@@ -37,9 +33,10 @@ export const mcpService = {
   // MCP Servers endpoints
   servers: {
     list: async (
+      token: string,
       params?: PaginationParams,
     ): Promise<PaginationResponse<MCPServerPublic>> => {
-      return fetcher<PaginationResponse<MCPServerPublic>>(
+      return fetcherWithAuth<PaginationResponse<MCPServerPublic>>(token)(
         API_ENDPOINTS.SERVERS,
         {
           params: {
@@ -60,19 +57,19 @@ export const mcpService = {
     },
 
     getByName: async (
+      token: string,
       serverName: string,
     ): Promise<MCPServerPublic | undefined> => {
       // This would need a search endpoint on the backend
       // For now, fetch all and filter client-side
-      const response = await fetcher<PaginationResponse<MCPServerPublic>>(
-        API_ENDPOINTS.SERVERS,
-        {
-          params: {
-            offset: "0",
-            limit: "100",
-          },
+      const response = await fetcherWithAuth<
+        PaginationResponse<MCPServerPublic>
+      >(token)(API_ENDPOINTS.SERVERS, {
+        params: {
+          offset: "0",
+          limit: "100",
         },
-      );
+      });
       return response.data.find(
         (s) => s.name.toLowerCase() === serverName.toLowerCase(),
       );
