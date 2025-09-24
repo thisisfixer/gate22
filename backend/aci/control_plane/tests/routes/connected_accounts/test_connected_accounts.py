@@ -40,13 +40,11 @@ logger = get_logger(__name__)
 def test_create_connected_account(
     test_client: TestClient,
     db_session: Session,
-    request: pytest.FixtureRequest,
     auth_type: AuthType,
     api_key: str | None,
     redirect_url_after_account_creation: str | None,
     should_succeed: bool,
     dummy_team: Team,
-    dummy_user: User,
     dummy_access_token_member: str,
     dummy_mcp_server_configuration: MCPServerConfiguration,
     is_team_allowed_by_config: bool,
@@ -59,6 +57,7 @@ def test_create_connected_account(
         config_added_to_team.allowed_teams = []
 
     config_added_to_team.auth_type = auth_type
+
     db_session.commit()
 
     body = {}
@@ -85,6 +84,7 @@ def test_create_connected_account(
             assert response.status_code == 200
             if auth_type == AuthType.API_KEY or auth_type == AuthType.NO_AUTH:
                 assert ConnectedAccountPublic.model_validate(response.json()) is not None
+
             elif auth_type == AuthType.OAUTH2:
                 assert (
                     OAuth2ConnectedAccountCreateResponse.model_validate(response.json()) is not None

@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import Literal, overload
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from aci.common import utils
@@ -118,6 +118,16 @@ def get_mcp_tools_by_ids(
     return [
         results_by_id[mcp_tool_id] for mcp_tool_id in mcp_tool_ids if mcp_tool_id in results_by_id
     ]
+
+
+def delete_mcp_tools_by_names(
+    db_session: Session,
+    mcp_tool_names: list[str],
+) -> None:
+    statement = delete(MCPTool).where(MCPTool.name.in_(mcp_tool_names))
+    db_session.execute(statement)
+    db_session.flush()
+    return
 
 
 def search_mcp_tools(

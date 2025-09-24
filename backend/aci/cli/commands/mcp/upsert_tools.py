@@ -132,6 +132,8 @@ def update_mcp_tools_helper(
     Regenerates embeddings in batch for those that require it and updates the mcp tools accordingly.
     Returns a list of updated mcp tool names.
     """
+
+    # TODO: Consider adapting diff_tools() from mcp_tool_utils.py
     mcp_tools_with_new_embeddings: list[MCPToolUpsert] = []
     mcp_tools_without_new_embeddings: list[MCPToolUpsert] = []
 
@@ -175,6 +177,9 @@ def update_mcp_tools_helper(
         mcp_tools_with_new_embeddings + mcp_tools_without_new_embeddings,
         mcp_tool_embeddings + [None] * len(mcp_tools_without_new_embeddings),
     )
+
+    # TODO: When there is any update to the mcp tools, storing the version (or the diff) of the
+    # mcp tools in the database
 
     return [mcp_tool.name for mcp_tool in mcp_tools_updated]
 

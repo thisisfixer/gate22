@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from aci.common.db.sql_models import MCPServer
 from aci.common.logging_setup import get_logger
-from aci.common.schemas.mcp_server import MCPServerUpsert
+from aci.common.schemas.mcp_server import MCPServerPartialUpdate, MCPServerUpsert
 
 logger = get_logger(__name__)
 
@@ -82,13 +82,13 @@ def create_mcp_server(
     return mcp_server
 
 
-def update_public_mcp_server(
+def update_mcp_server(
     db_session: Session,
     mcp_server: MCPServer,
-    mcp_server_upsert: MCPServerUpsert,
+    mcp_server_upsert: MCPServerUpsert | MCPServerPartialUpdate,
     embedding: list[float] | None = None,
 ) -> MCPServer:
-    new_mcp_server_data = mcp_server_upsert.model_dump(mode="json", exclude_none=True)
+    new_mcp_server_data = mcp_server_upsert.model_dump(mode="json", exclude_unset=True)
 
     for field, value in new_mcp_server_data.items():
         setattr(mcp_server, field, value)

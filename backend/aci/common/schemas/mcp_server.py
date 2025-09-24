@@ -1,9 +1,9 @@
-import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from aci.common import mcp_tool_utils
 from aci.common.enums import AuthType, MCPServerTransportType
 from aci.common.schemas.mcp_auth import AuthConfig
 from aci.common.schemas.mcp_tool import MCPToolPublicWithoutSchema
@@ -15,6 +15,19 @@ class MCPServerMetadata(BaseModel):
     is_virtual_mcp_server: bool | None = None
 
     model_config = ConfigDict(extra="forbid")
+
+
+class MCPServerPartialUpdate(BaseModel):
+    """
+    Used for Partial Updating data to the database.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = Field(default=None)
+    logo: str | None = Field(default=None)
+    categories: list[str] | None = Field(default=None)
+    last_synced_at: datetime | None = Field(default=None)
 
 
 class MCPServerUpsert(BaseModel):
@@ -38,11 +51,9 @@ class MCPServerUpsert(BaseModel):
             "have consecutive underscores, and not start or end with an underscore"
         )
 
-        if v.startswith("_") or v.endswith("_"):
+        if v != mcp_tool_utils.sanitize_canonical_name(v):
             raise ValueError(msg)
 
-        if not re.match(r"^[A-Z0-9_]+$", v) or "__" in v:
-            raise ValueError(msg)
         return v
 
 

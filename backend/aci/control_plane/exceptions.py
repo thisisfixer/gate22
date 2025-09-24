@@ -236,3 +236,29 @@ class OAuth2MetadataDiscoveryError(ControlPlaneException):
             message=message,
             error_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+class MCPToolsManagerError(ControlPlaneException):
+    """
+    Exception raised when an error occurs in the MCP tools manager
+    """
+
+    def __init__(self, message: str | None = None):
+        super().__init__(
+            title="MCP tools manager error",
+            message=message,
+            error_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+class MCPToolsNormalizationError(ControlPlaneException):
+    """
+    Exception raised when an error occurs in the normalization of the MCP tools
+    """
+
+    def __init__(self, message: str | None = None):
+        super().__init__(
+            title="MCP tools normalization error",
+            message=message,
+            error_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
