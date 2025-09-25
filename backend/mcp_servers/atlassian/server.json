@@ -3,7 +3,7 @@
   "url": "https://mcp.atlassian.com/v1/sse",
   "transport_type": "sse",
   "description": "The Atlassian Rovo MCP Server is a cloud-based bridge between your Atlassian Cloud site and compatible external tools. Once configured, it enables those tools to interact with Jira, Compass, and Confluence data in real-time.",
-  "logo": "https://raw.githubusercontent.com/aipotheosis-labs/aipolabs-icons/refs/heads/main/apps/gitlab.svg",
+  "logo": "https://raw.githubusercontent.com/aipotheosis-labs/aipolabs-icons/refs/heads/main/apps/atlassian.svg",
   "categories": ["Dev Tools", "Project Management", "Documentation"],
   "auth_configs": [
     {
