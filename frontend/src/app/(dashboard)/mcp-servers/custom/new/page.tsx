@@ -1,0 +1,1140 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
+import { useMetaInfo } from "@/components/context/metainfo";
+import { toast } from "sonner";
+import {
+  useOAuth2Discovery,
+  useOAuth2ClientRegistration,
+  useCreateCustomMCPServer,
+} from "@/features/mcp/hooks/use-custom-mcp-server";
+import {
+  OAuth2DiscoveryResponse,
+  OAuth2DCRResponse,
+  AuthConfig,
+} from "@/features/mcp/api/custom-mcp.service";
+
+export default function AddCustomMCPServerPage() {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [name, setName] = useState("");
+  const [authMethods, setAuthMethods] = useState<{
+    no_auth: boolean;
+    api_key: boolean;
+    oauth2: boolean;
+  }>({
+    no_auth: false,
+    api_key: false,
+    oauth2: false,
+  });
+  const [url, setUrl] = useState("");
+  const [transportType, setTransportType] = useState<string>("");
+  const [description, setDescription] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryInput, setCategoryInput] = useState("");
+
+  // Step 2 fields - OAuth2
+  const [oauth2Config, setOauth2Config] = useState<OAuth2DiscoveryResponse>({});
+  const [authorizeUrl, setAuthorizeUrl] = useState("");
+  const [tokenUrl, setTokenUrl] = useState("");
+  const [dcrResult, setDcrResult] = useState<OAuth2DCRResponse | null>(null);
+  const [oauth2RegistrationMode, setOauth2RegistrationMode] =
+    useState<string>("");
+
+  // Manual OAuth2 registration fields
+  const [manualEndpointAuthMethod, setManualEndpointAuthMethod] =
+    useState<string>("");
+  const [manualClientId, setManualClientId] = useState("");
+  const [manualClientSecret, setManualClientSecret] = useState("");
+  const [manualScope, setManualScope] = useState("");
+
+  // Step 2 fields - API Key
+  const [apiKeyLocation, setApiKeyLocation] = useState<string>("");
+  const [apiKeyName, setApiKeyName] = useState("");
+  const [apiKeyPrefix, setApiKeyPrefix] = useState("");
+
+  // Step 3 fields - Operational Account
+  const [operationalAccountAuthType, setOperationalAccountAuthType] =
+    useState<string>("");
+
+  const { accessToken } = useMetaInfo();
+
+  // Hooks for API calls
+  const oAuth2Discovery = useOAuth2Discovery();
+  const oAuth2ClientRegistration = useOAuth2ClientRegistration();
+  const createCustomMCPServer = useCreateCustomMCPServer();
+
+  const isAutomaticRegistrationAvailable = useCallback(() => {
+    return !!(
+      oauth2Config.registration_url &&
+      oauth2Config.token_endpoint_auth_method_supported &&
+      oauth2Config.token_endpoint_auth_method_supported.length > 0
+    );
+  }, [
+    oauth2Config.registration_url,
+    oauth2Config.token_endpoint_auth_method_supported,
+  ]);
+
+  // Auth method management functions
+  const handleAuthMethodChange = (
+    method: keyof typeof authMethods,
+    checked: boolean,
+  ) => {
+    setAuthMethods((prev) => ({
+      ...prev,
+      [method]: checked,
+    }));
+  };
+
+  const hasSelectedAuthMethod = () => {
+    return Object.values(authMethods).some((method) => method);
+  };
+
+  const needsStep2 = () => {
+    return authMethods.api_key || authMethods.oauth2;
+  };
+
+  const needsStep3 = () => {
+    return hasSelectedAuthMethod(); // Always show step 3 if any auth method is selected
+  };
+
+  const getSelectedAuthMethods = () => {
+    return Object.entries(authMethods)
+      .filter(([, selected]) => selected)
+      .map(([method]) => method);
+  };
+
+  // Check if Step 2 form is valid
+  const isStep2Valid = () => {
+    // API Key validation
+    if (authMethods.api_key) {
+      if (!apiKeyLocation || !apiKeyName.trim()) {
+        return false;
+      }
+    }
+
+    // OAuth2 validation
+    if (authMethods.oauth2) {
+      if (!authorizeUrl.trim() || !tokenUrl.trim()) {
+        return false;
+      }
+
+      if (oauth2RegistrationMode === "automatic") {
+        if (!dcrResult) {
+          return false;
+        }
+      } else if (oauth2RegistrationMode === "manual") {
+        if (!manualEndpointAuthMethod || !manualClientId.trim()) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  // Category management functions
+  const addCategory = (category: string) => {
+    const trimmedCategory = category.trim();
+    if (trimmedCategory && !categories.includes(trimmedCategory)) {
+      setCategories([...categories, trimmedCategory]);
+      setCategoryInput("");
+    }
+  };
+
+  const removeCategory = (categoryToRemove: string) => {
+    setCategories(categories.filter((cat) => cat !== categoryToRemove));
+  };
+
+  const handleCategoryKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addCategory(categoryInput);
+    }
+  };
+
+  // Name validation function
+  const validateName = (name: string): string | null => {
+    if (!name.trim()) {
+      return "Server name is required";
+    }
+
+    // Check for valid characters: uppercase letters, numbers, underscores only
+    if (!/^[A-Z0-9_]+$/.test(name)) {
+      return "Name must contain only uppercase letters, numbers, and underscores";
+    }
+
+    // Check for consecutive underscores
+    if (/__/.test(name)) {
+      return "Name cannot contain consecutive underscores";
+    }
+
+    return null;
+  };
+
+  // URL validation function
+  const validateUrl = (url: string): string | null => {
+    if (!url.trim()) {
+      return "URL is required";
+    }
+
+    try {
+      new URL(url);
+      return null;
+    } catch {
+      return "Please enter a valid URL";
+    }
+  };
+
+  const handleStep1Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate name
+    const nameError = validateName(name);
+    if (nameError) {
+      toast.error(nameError);
+      return;
+    }
+
+    // Validate auth methods
+    if (!hasSelectedAuthMethod()) {
+      toast.error("Please select at least one authentication method");
+      return;
+    }
+
+    // Validate URL
+    const urlError = validateUrl(url);
+    if (urlError) {
+      toast.error(urlError);
+      return;
+    }
+
+    // Validate transport type
+    if (!transportType) {
+      toast.error("Please select a transport type");
+      return;
+    }
+
+    if (!accessToken) {
+      toast.error("Authentication required. Please log in.");
+      return;
+    }
+
+    // If needs step 2 (API Key or OAuth2), proceed to step 2
+    if (needsStep2()) {
+      // If OAuth2 is selected, perform discovery
+      if (authMethods.oauth2) {
+        try {
+          const response = await oAuth2Discovery.mutateAsync({
+            mcp_server_url: url.trim(),
+          });
+
+          setOauth2Config(response);
+          // Pre-populate fields with discovered values
+          setAuthorizeUrl(response.authorize_url || "");
+          setTokenUrl(response.access_token_url || "");
+
+          // Set default registration mode based on discovery results
+          if (
+            response.registration_url &&
+            response.token_endpoint_auth_method_supported &&
+            response.token_endpoint_auth_method_supported.length > 0
+          ) {
+            setOauth2RegistrationMode("automatic");
+          } else {
+            setOauth2RegistrationMode("manual");
+          }
+
+          setCurrentStep(2);
+        } catch {
+          // Error handling is done in the hook
+          // Set manual mode as fallback when discovery fails
+          setOauth2RegistrationMode("manual");
+          setCurrentStep(2);
+        }
+      } else {
+        // For API Key only, go directly to step 2
+        setCurrentStep(2);
+      }
+    } else {
+      // For No Auth only, go to step 3 (operational account)
+      setCurrentStep(3);
+    }
+  };
+
+  const createServer = async () => {
+    const authConfigs: AuthConfig[] = [];
+
+    // Build auth configs for each selected auth method
+    if (authMethods.no_auth) {
+      authConfigs.push({
+        type: "no_auth",
+      });
+    }
+
+    if (authMethods.api_key) {
+      authConfigs.push({
+        type: "api_key",
+        location: apiKeyLocation,
+        name: apiKeyName.trim(),
+        prefix: apiKeyPrefix.trim() || undefined,
+      });
+    }
+
+    if (authMethods.oauth2) {
+      const oauth2AuthConfig: AuthConfig = {
+        type: "oauth2",
+        location: "header",
+        name: "Authorization",
+        prefix: "Bearer",
+        authorize_url: authorizeUrl.trim(),
+        access_token_url: tokenUrl.trim(),
+        refresh_token_url: oauth2Config.refresh_token_url || undefined,
+        scope: "",
+      };
+
+      if (oauth2RegistrationMode === "automatic" && dcrResult) {
+        oauth2AuthConfig.client_id = dcrResult.client_id;
+        oauth2AuthConfig.client_secret = dcrResult.client_secret;
+        oauth2AuthConfig.token_endpoint_auth_method =
+          dcrResult.token_endpoint_auth_method;
+      } else if (oauth2RegistrationMode === "manual") {
+        oauth2AuthConfig.client_id = manualClientId.trim();
+        oauth2AuthConfig.client_secret = manualClientSecret.trim() || undefined;
+        oauth2AuthConfig.scope = manualScope.trim() || "";
+        oauth2AuthConfig.token_endpoint_auth_method = manualEndpointAuthMethod;
+      }
+
+      authConfigs.push(oauth2AuthConfig);
+    }
+
+    const payload = {
+      name: name.trim(),
+      url: url.trim(),
+      transport_type: transportType,
+      description: description.trim(),
+      categories: categories,
+      auth_configs: authConfigs,
+      server_metadata: {},
+      operational_account_auth_type: operationalAccountAuthType,
+      ...(logoUrl.trim() && { logo: logoUrl.trim() }),
+    };
+
+    await createCustomMCPServer.mutateAsync(payload);
+  };
+
+  const handleAutoRegisterClient = async () => {
+    if (!oauth2Config.registration_url) {
+      toast.error("Registration URL not available from OAuth2 discovery");
+      return;
+    }
+
+    try {
+      const response = await oAuth2ClientRegistration.mutateAsync({
+        mcp_server_url: url.trim(),
+        registration_url: oauth2Config.registration_url,
+        token_endpoint_auth_method_supported:
+          oauth2Config.token_endpoint_auth_method_supported || [],
+      });
+
+      setDcrResult(response);
+    } catch {
+      // Error handling is done in the hook
+    }
+  };
+
+  const handleStep2Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate API Key fields if API Key is selected
+    if (authMethods.api_key) {
+      if (!apiKeyLocation) {
+        toast.error("Please select an API key location");
+        return;
+      }
+      if (!apiKeyName.trim()) {
+        toast.error("Please enter an API key name");
+        return;
+      }
+    }
+
+    // Validate OAuth2 fields if OAuth2 is selected
+    if (authMethods.oauth2) {
+      if (!authorizeUrl.trim()) {
+        toast.error("Please enter an authorization URL");
+        return;
+      }
+      if (!tokenUrl.trim()) {
+        toast.error("Please enter a token URL");
+        return;
+      }
+
+      if (oauth2RegistrationMode === "automatic") {
+        if (!dcrResult) {
+          toast.error(
+            "Please complete auto client registration before proceeding",
+          );
+          return;
+        }
+      } else if (oauth2RegistrationMode === "manual") {
+        if (!manualEndpointAuthMethod) {
+          toast.error("Please select an endpoint auth method");
+          return;
+        }
+        if (!manualClientId.trim()) {
+          toast.error("Please enter a client ID");
+          return;
+        }
+      }
+    }
+
+    setCurrentStep(3);
+  };
+
+  const handleStep3Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate operational account auth type
+    if (!operationalAccountAuthType) {
+      toast.error("Please select an operational account authentication method");
+      return;
+    }
+
+    await createServer();
+  };
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      {/* Back Button */}
+      <Button
+        variant="outline"
+        onClick={() => router.push("/mcp-servers")}
+        className="mb-6"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to MCP Servers
+      </Button>
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold">Add Custom MCP Server</h1>
+          <p className="text-muted-foreground mt-1">
+            {currentStep === 1
+              ? needsStep3()
+                ? `Step ${currentStep} of 3: Server Details`
+                : "Create a new custom MCP server configuration"
+              : currentStep === 2
+                ? `Step ${currentStep} of 3: Setup Auth Method`
+                : currentStep === 3
+                  ? `Step ${currentStep} of 3: Operational Account`
+                  : "Create a new custom MCP server configuration"}
+          </p>
+        </div>
+      </div>
+
+      <Separator className="mb-6" />
+
+      {/* Step 1: Server Details */}
+      {currentStep === 1 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Server Details</h2>
+          <form onSubmit={handleStep1Submit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">
+                Server Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="MY_CUSTOM_SERVER"
+                value={name}
+                onChange={(e) => {
+                  // Only allow uppercase letters, digits, and underscores
+                  const filteredValue = e.target.value
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9_]/g, "");
+                  setName(filteredValue);
+                }}
+                disabled={oAuth2Discovery.isPending}
+                required
+                className="max-w-md"
+              />
+              <p className="text-sm text-muted-foreground">
+                Use uppercase letters, numbers, and underscores only. No
+                consecutive underscores.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>
+                Authentication Methods <span className="text-red-500">*</span>
+              </Label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="no_auth"
+                    checked={authMethods.no_auth}
+                    onCheckedChange={(checked) =>
+                      handleAuthMethodChange("no_auth", checked as boolean)
+                    }
+                    disabled={oAuth2Discovery.isPending}
+                  />
+                  <Label htmlFor="no_auth" className="text-sm font-normal">
+                    No Auth
+                  </Label>
+                </div>
+                {/* Commenting out API Key for now as it would bring in more complexity for users to setup */}
+                {/* <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="api_key"
+                    checked={authMethods.api_key}
+                    onCheckedChange={(checked) =>
+                      handleAuthMethodChange("api_key", checked as boolean)
+                    }
+                    disabled={oAuth2Discovery.isPending}
+                  />
+                  <Label htmlFor="api_key" className="text-sm font-normal">
+                    API Key
+                  </Label>
+                </div> */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="oauth2"
+                    checked={authMethods.oauth2}
+                    onCheckedChange={(checked) =>
+                      handleAuthMethodChange("oauth2", checked as boolean)
+                    }
+                    disabled={oAuth2Discovery.isPending}
+                  />
+                  <Label htmlFor="oauth2" className="text-sm font-normal">
+                    OAuth2
+                  </Label>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Select one or more authentication methods supported by your
+                server.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="url">
+                Server URL <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="url"
+                type="url"
+                placeholder="http://mcp.example.com/mcp"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                disabled={oAuth2Discovery.isPending}
+                required
+                className="max-w-md"
+              />
+              <p className="text-sm text-muted-foreground">
+                Enter the full URL to your MCP server endpoint.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="transportType">
+                Transport Type <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={transportType}
+                onValueChange={setTransportType}
+                disabled={oAuth2Discovery.isPending}
+                required
+              >
+                <SelectTrigger className="max-w-md">
+                  <SelectValue placeholder="Select transport type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="streamable_http">
+                    Streamable HTTP
+                  </SelectItem>
+                  <SelectItem value="sse">SSE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Enter a description for your MCP server..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={oAuth2Discovery.isPending}
+                className="max-w-md"
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="logoUrl">Logo URL</Label>
+              <Input
+                id="logoUrl"
+                type="url"
+                placeholder="https://example.com/logo.png"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                disabled={oAuth2Discovery.isPending}
+                className="max-w-md"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="categories">Categories</Label>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {categories.map((category, index) => (
+                    <Badge
+                      key={index}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {category}
+                      <button
+                        type="button"
+                        onClick={() => removeCategory(category)}
+                        className="ml-1 hover:bg-muted rounded-full p-0.5"
+                        disabled={oAuth2Discovery.isPending}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    id="categories"
+                    type="text"
+                    placeholder="Add a category and press Enter..."
+                    value={categoryInput}
+                    onChange={(e) => setCategoryInput(e.target.value)}
+                    onKeyPress={handleCategoryKeyPress}
+                    disabled={oAuth2Discovery.isPending}
+                    className="max-w-md"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addCategory(categoryInput)}
+                    disabled={
+                      oAuth2Discovery.isPending || !categoryInput.trim()
+                    }
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                type="submit"
+                disabled={
+                  oAuth2Discovery.isPending ||
+                  createCustomMCPServer.isPending ||
+                  !name.trim() ||
+                  !hasSelectedAuthMethod() ||
+                  !url.trim() ||
+                  !transportType
+                }
+                className="flex items-center gap-2"
+              >
+                {oAuth2Discovery.isPending ||
+                createCustomMCPServer.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {oAuth2Discovery.isPending
+                  ? "Discovering..."
+                  : createCustomMCPServer.isPending
+                    ? "Registering..."
+                    : needsStep2()
+                      ? "Next: Setup Auth Method"
+                      : "Next: Operational Account"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push("/mcp-servers")}
+                disabled={
+                  oAuth2Discovery.isPending || createCustomMCPServer.isPending
+                }
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Step 2: Setup Auth Method */}
+      {currentStep === 2 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Setup Auth Method</h2>
+          <form onSubmit={handleStep2Submit} className="space-y-6">
+            {authMethods.api_key && (
+              <div className="space-y-4 p-4 border border-gray-200 rounded-lg">
+                <h3 className="text-md font-medium">API Key Configuration</h3>
+
+                <div className="space-y-2">
+                  <Label htmlFor="apiKeyLocation">
+                    Location <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={apiKeyLocation}
+                    onValueChange={setApiKeyLocation}
+                    disabled={createCustomMCPServer.isPending}
+                  >
+                    <SelectTrigger className="max-w-md">
+                      <SelectValue placeholder="Select API key location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="path">PATH</SelectItem>
+                      <SelectItem value="query">QUERY</SelectItem>
+                      <SelectItem value="header">HEADER</SelectItem>
+                      <SelectItem value="cookie">COOKIE</SelectItem>
+                      <SelectItem value="body">BODY</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    The location of the API key in the request.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="apiKeyName">
+                    Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="apiKeyName"
+                    type="text"
+                    placeholder="X-Subscription-Token"
+                    value={apiKeyName}
+                    onChange={(e) => setApiKeyName(e.target.value)}
+                    disabled={createCustomMCPServer.isPending}
+                    className="max-w-md"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    The name of the API key in the request, e.g.,
+                    &apos;X-Subscription-Token&apos;.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="apiKeyPrefix">Prefix</Label>
+                  <Input
+                    id="apiKeyPrefix"
+                    type="text"
+                    placeholder="Bearer"
+                    value={apiKeyPrefix}
+                    onChange={(e) => setApiKeyPrefix(e.target.value)}
+                    disabled={createCustomMCPServer.isPending}
+                    className="max-w-md"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    The prefix of the API key in the request, e.g.,
+                    &apos;Bearer&apos;.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {authMethods.oauth2 && (
+              <div className="space-y-4 p-4 border border-gray-200 rounded-lg">
+                <h3 className="text-md font-medium">OAuth2 Configuration</h3>
+
+                <div className="space-y-2">
+                  <Label htmlFor="authorizeUrl">
+                    Authorization URL <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="authorizeUrl"
+                    type="url"
+                    placeholder="https://example.com/oauth/authorize"
+                    value={authorizeUrl}
+                    onChange={(e) => setAuthorizeUrl(e.target.value)}
+                    disabled={createCustomMCPServer.isPending}
+                    className="max-w-md"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="tokenUrl">
+                    Token URL <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="tokenUrl"
+                    type="url"
+                    placeholder="https://example.com/oauth/token"
+                    value={tokenUrl}
+                    onChange={(e) => setTokenUrl(e.target.value)}
+                    disabled={createCustomMCPServer.isPending}
+                    className="max-w-md"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="authMethodsSupported">
+                    Token Endpoint Auth Methods Supported
+                  </Label>
+                  <Input
+                    id="authMethodsSupported"
+                    type="text"
+                    value={
+                      oauth2Config.token_endpoint_auth_method_supported?.join(
+                        ", ",
+                      ) || "None"
+                    }
+                    disabled
+                    readOnly
+                    className="max-w-md bg-muted"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Supported authentication methods discovered from the server.
+                  </p>
+                </div>
+
+                {/* Client Registration Mode */}
+                <div className="space-y-4">
+                  <Label>Client Registration</Label>
+                  <RadioGroup
+                    value={oauth2RegistrationMode}
+                    onValueChange={setOauth2RegistrationMode}
+                    disabled={createCustomMCPServer.isPending}
+                    className="flex flex-row space-x-6"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem
+                        value="automatic"
+                        id="automatic"
+                        disabled={
+                          !isAutomaticRegistrationAvailable() ||
+                          createCustomMCPServer.isPending
+                        }
+                      />
+                      <Label
+                        htmlFor="automatic"
+                        className={`text-sm font-normal ${
+                          !isAutomaticRegistrationAvailable()
+                            ? "text-muted-foreground"
+                            : ""
+                        }`}
+                      >
+                        Automatic
+                        {!isAutomaticRegistrationAvailable() && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            (Not available)
+                          </span>
+                        )}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="manual" id="manual" />
+                      <Label htmlFor="manual" className="text-sm font-normal">
+                        Manual
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  {!isAutomaticRegistrationAvailable() && (
+                    <p className="text-sm text-muted-foreground">
+                      Automatic registration is not available because the server
+                      did not provide a registration URL or supported
+                      authentication methods during discovery.
+                    </p>
+                  )}
+                </div>
+
+                {oauth2RegistrationMode === "automatic" &&
+                  oauth2Config.registration_url && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleAutoRegisterClient}
+                          disabled={
+                            oAuth2ClientRegistration.isPending ||
+                            createCustomMCPServer.isPending
+                          }
+                          className="flex items-center gap-2"
+                        >
+                          {oAuth2ClientRegistration.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Plus className="h-4 w-4" />
+                          )}
+                          {oAuth2ClientRegistration.isPending
+                            ? "Registering..."
+                            : "Auto Register Client"}
+                        </Button>
+                        {dcrResult && (
+                          <span className="text-sm text-green-600 font-medium">
+                            ✓ Client registered successfully
+                          </span>
+                        )}
+                      </div>
+
+                      {dcrResult && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+                          <h4 className="text-sm font-medium text-green-800">
+                            Registration Results
+                          </h4>
+                          <div className="grid grid-cols-1 gap-3 text-sm">
+                            <div>
+                              <span className="font-medium text-green-700">
+                                Auth Method:
+                              </span>{" "}
+                              <span className="text-green-600">
+                                {dcrResult.token_endpoint_auth_method}
+                              </span>
+                            </div>
+                            {dcrResult.client_id && (
+                              <div>
+                                <span className="font-medium text-green-700">
+                                  Client ID:
+                                </span>{" "}
+                                <span className="text-green-600 font-mono text-xs">
+                                  {dcrResult.client_id}
+                                </span>
+                              </div>
+                            )}
+                            {dcrResult.client_secret && (
+                              <div>
+                                <span className="font-medium text-green-700">
+                                  Client Secret:
+                                </span>{" "}
+                                <span className="text-green-600 font-mono text-xs">
+                                  {"•".repeat(8)}...
+                                  {dcrResult.client_secret.slice(-4)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* Manual Registration */}
+                {oauth2RegistrationMode === "manual" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="manualEndpointAuthMethod">
+                        Endpoint Auth Method{" "}
+                        <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={manualEndpointAuthMethod}
+                        onValueChange={setManualEndpointAuthMethod}
+                        disabled={createCustomMCPServer.isPending}
+                      >
+                        <SelectTrigger className="max-w-md">
+                          <SelectValue placeholder="Select auth method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {oauth2Config.token_endpoint_auth_method_supported?.map(
+                            (method) => (
+                              <SelectItem key={method} value={method}>
+                                {method}
+                              </SelectItem>
+                            ),
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="manualClientId">
+                        Client ID <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="manualClientId"
+                        type="text"
+                        placeholder="Enter client ID"
+                        value={manualClientId}
+                        onChange={(e) => setManualClientId(e.target.value)}
+                        disabled={createCustomMCPServer.isPending}
+                        className="max-w-md"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="manualClientSecret">
+                        Client Secret (optional)
+                      </Label>
+                      <Input
+                        id="manualClientSecret"
+                        type="password"
+                        placeholder="Enter client secret"
+                        value={manualClientSecret}
+                        onChange={(e) => setManualClientSecret(e.target.value)}
+                        disabled={createCustomMCPServer.isPending}
+                        className="max-w-md"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="manualScope">Scope</Label>
+                      <Input
+                        id="manualScope"
+                        type="text"
+                        placeholder="Enter scope (e.g., read write)"
+                        value={manualScope}
+                        onChange={(e) => setManualScope(e.target.value)}
+                        disabled={createCustomMCPServer.isPending}
+                        className="max-w-md"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCurrentStep(1)}
+                disabled={createCustomMCPServer.isPending}
+              >
+                Back
+              </Button>
+              <Button
+                type="submit"
+                disabled={createCustomMCPServer.isPending || !isStep2Valid()}
+                className="flex items-center gap-2"
+              >
+                {createCustomMCPServer.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {createCustomMCPServer.isPending
+                  ? "Registering..."
+                  : "Next: Operational Account"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push("/mcp-servers")}
+                disabled={createCustomMCPServer.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Step 3: Operational Account */}
+      {currentStep === 3 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4">Operational Account</h2>
+          <form onSubmit={handleStep3Submit} className="space-y-6">
+            <div className="space-y-4 p-4 border border-gray-200 rounded-lg">
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Operational Account is a service account used for fetching MCP
+                  server information and listening to any server changes, for
+                  example fetching the MCP tool list. Please select the
+                  authentication method used to connect Operational Account.
+                </p>
+
+                <div className="space-y-2">
+                  <Label htmlFor="operationalAccountAuthType">
+                    Operational Account Auth Method{" "}
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={operationalAccountAuthType}
+                    onValueChange={setOperationalAccountAuthType}
+                    disabled={createCustomMCPServer.isPending}
+                    required
+                  >
+                    <SelectTrigger className="max-w-md">
+                      <SelectValue placeholder="Select auth method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getSelectedAuthMethods().map((method) => (
+                        <SelectItem key={method} value={method}>
+                          {method === "no_auth"
+                            ? "No Auth"
+                            : method === "api_key"
+                              ? "API Key"
+                              : method === "oauth2"
+                                ? "OAuth2"
+                                : method}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCurrentStep(needsStep2() ? 2 : 1)}
+                disabled={createCustomMCPServer.isPending}
+              >
+                Back
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  createCustomMCPServer.isPending || !operationalAccountAuthType
+                }
+                className="flex items-center gap-2"
+              >
+                {createCustomMCPServer.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                {createCustomMCPServer.isPending
+                  ? "Registering..."
+                  : "Register Server"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push("/mcp-servers")}
+                disabled={createCustomMCPServer.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

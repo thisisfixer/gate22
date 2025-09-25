@@ -8,6 +8,7 @@ import {
   MCPToolPublic,
   PaginationParams,
   PaginationResponse,
+  ToolsSyncResult,
 } from "../types/mcp.types";
 import { CONTROL_PLANE_PATH } from "@/config/api.constants";
 
@@ -74,6 +75,17 @@ export const mcpService = {
         (s) => s.name.toLowerCase() === serverName.toLowerCase(),
       );
     },
+
+    syncTools: async (
+      token: string,
+      serverId: string,
+    ): Promise<ToolsSyncResult> => {
+      const api = createAuthenticatedRequest(token);
+      return api.post<ToolsSyncResult>(
+        `${API_ENDPOINTS.SERVERS}/${serverId}/refresh-tools`,
+        {},
+      );
+    },
   },
 
   // MCP Server Configurations endpoints (requires auth)
@@ -127,6 +139,21 @@ export const mcpService = {
     delete: async (token: string, configurationId: string): Promise<void> => {
       const api = createAuthenticatedRequest(token);
       return api.delete(`${API_ENDPOINTS.CONFIGURATIONS}/${configurationId}`);
+    },
+
+    listOperational: async (
+      token: string,
+      params?: PaginationParams,
+    ): Promise<PaginationResponse<MCPServerConfigurationPublic>> => {
+      return fetcherWithAuth<PaginationResponse<MCPServerConfigurationPublic>>(
+        token,
+      )(API_ENDPOINTS.CONFIGURATIONS, {
+        params: {
+          connected_account_ownerships: "operational",
+          offset: params?.offset?.toString() || "0",
+          limit: params?.limit?.toString() || "100",
+        },
+      });
     },
   },
 };

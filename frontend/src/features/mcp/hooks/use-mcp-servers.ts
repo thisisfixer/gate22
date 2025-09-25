@@ -154,6 +154,47 @@ export function useDeleteMCPServerConfiguration() {
   });
 }
 
+// Hook to sync MCP server tools
+export function useSyncMCPServerTools() {
+  const { accessToken } = useMetaInfo();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (serverId: string) => {
+      return mcpService.servers.syncTools(accessToken!, serverId);
+    },
+    onSuccess: (data, serverId) => {
+      // Invalidate and refetch the specific server to get updated sync time and tools
+      queryClient.invalidateQueries({
+        queryKey: mcpQueryKeys.servers.detail(serverId),
+      });
+      // Also invalidate the servers list in case it affects the list view
+      queryClient.invalidateQueries({
+        queryKey: mcpQueryKeys.servers.all,
+      });
+    },
+  });
+}
+
+// Hook to list operational MCP server configurations
+export function useOperationalMCPServerConfigurations(
+  params?: PaginationParams,
+) {
+  const { accessToken, activeOrg, activeRole } = useMetaInfo();
+
+  // Create auth context key for cache separation without exposing token
+  const authContextKey = activeOrg
+    ? `${activeOrg.orgId}:${activeRole}`
+    : undefined;
+
+  return useQuery({
+    queryKey: ["mcp", "configurations", "operational", params, authContextKey],
+    queryFn: () =>
+      mcpService.configurations.listOperational(accessToken!, params),
+    enabled: !!accessToken,
+  });
+}
+
 // Hook to get a specific MCP tool by name
 export function useMCPTool(toolName: string) {
   const { accessToken } = useMetaInfo();

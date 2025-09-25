@@ -7,6 +7,7 @@ export enum AuthType {
 export enum ConnectedAccountOwnership {
   INDIVIDUAL = "individual",
   SHARED = "shared",
+  OPERATIONAL = "operational",
 }
 
 export interface AuthConfig {
@@ -43,6 +44,8 @@ export interface MCPServerPublic extends MCPServerPublicBasic {
   tools: MCPToolBasic[];
   created_at: string;
   updated_at: string;
+  last_synced_at: string | null;
+  organization_id: string | null;
 }
 
 export interface TeamInfo {
@@ -85,6 +88,7 @@ export interface MCPServerConfigurationPublic {
   created_at: string;
   updated_at: string;
   mcp_server: MCPServerPublicBasic;
+  has_operational_connected_account?: boolean;
 }
 
 export interface MCPServerConfigurationPublicBasic {
@@ -107,4 +111,11 @@ export interface PaginationResponse<T> {
   data: T[];
   offset: number;
   total?: number;
+}
+
+export interface ToolsSyncResult {
+  tools_created: string[];
+  tools_deleted: string[];
+  tools_updated: string[];
+  tools_unchanged: string[];
 }

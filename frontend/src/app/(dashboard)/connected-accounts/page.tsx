@@ -32,6 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ConnectedAccountOwnership } from "@/features/mcp/types/mcp.types";
 import { getOwnershipLabel } from "@/utils/configuration-labels";
+import { useOperationalMCPServerConfigurations } from "@/features/mcp/hooks/use-mcp-servers";
 
 const columnHelper = createColumnHelper<ConnectedAccount>();
 
@@ -41,6 +42,12 @@ export default function ConnectedAccountsPage() {
   const { data: mcpConfigurationsResponse } = useMCPServerConfigurations({
     limit: 100,
   });
+
+  const { data: operationalConfigurationsResponse } =
+    useOperationalMCPServerConfigurations({
+      limit: 100,
+    });
+
   const { mutateAsync: deleteAccount } = useDeleteConnectedAccount();
 
   // Check for OAuth errors in query params
@@ -56,23 +63,36 @@ export default function ConnectedAccountsPage() {
   }, [searchParams]);
 
   // Create a map of MCP configuration IDs to server info
+  // This is for the MCP configurations that are non-operational type
   const mcpConfigMap = useMemo(() => {
-    if (!mcpConfigurationsResponse?.data) return {};
-    return mcpConfigurationsResponse.data.reduce(
+    const combinedConfigurations = [
+      ...(mcpConfigurationsResponse?.data || []),
+      ...(operationalConfigurationsResponse?.data || []),
+    ];
+    if (!combinedConfigurations) return {};
+    return combinedConfigurations.reduce(
       (acc, config) => {
         acc[config.id] = {
           name: config.mcp_server?.name || config.id,
+          serverId: config.mcp_server?.id || null,
           logo: config.mcp_server?.logo || null,
           configName: config.name || config.id,
+          ownership: config.connected_account_ownership || null,
         };
         return acc;
       },
       {} as Record<
         string,
-        { name: string; logo: string | null; configName: string }
+        {
+          serverId: string | null;
+          name: string;
+          logo: string | null;
+          configName: string;
+          ownership: ConnectedAccountOwnership | null;
+        }
       >,
     );
-  }, [mcpConfigurationsResponse]);
+  }, [mcpConfigurationsResponse, operationalConfigurationsResponse]);
 
   const handleDelete = useCallback(
     async (account: ConnectedAccount) => {
@@ -121,9 +141,10 @@ export default function ConnectedAccountsPage() {
         cell: (info) => {
           const configId = info.getValue();
           const config = mcpConfigMap[configId];
+          if (!config) return null;
           return (
             <div className="flex items-center gap-2">
-              {config?.logo && (
+              {config.logo && (
                 <div className="relative h-5 w-5 shrink-0 overflow-hidden">
                   <Image
                     src={config.logo}
@@ -133,17 +154,37 @@ export default function ConnectedAccountsPage() {
                   />
                 </div>
               )}
-              <div className="flex items-center gap-1">
-                <span className="font-medium">{config?.name || "Unknown"}</span>
-                <span className="text-muted-foreground">(</span>
-                <Link
-                  href={`/mcp-configuration/${configId}`}
-                  className="text-primary hover:underline"
-                >
-                  {config?.configName || "Unknown"}
-                </Link>
-                <span className="text-muted-foreground">)</span>
-              </div>
+              {config.ownership !== ConnectedAccountOwnership.OPERATIONAL ? (
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={`/mcp-servers/${config.serverId}`}
+                    className="text-primary hover:underline"
+                  >
+                    <span className="font-medium">
+                      {config.name || "Unknown"}
+                    </span>
+                  </Link>
+                  <span className="text-muted-foreground">(</span>
+                  <Link
+                    href={`/mcp-configuration/${configId}`}
+                    className="text-primary hover:underline"
+                  >
+                    {config.configName || "Unknown"}
+                  </Link>
+                  <span className="text-muted-foreground">)</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={`/mcp-servers/${config.serverId}`}
+                    className="text-primary hover:underline"
+                  >
+                    <span className="font-medium">
+                      {config.name || "Unknown"}
+                    </span>
+                  </Link>
+                </div>
+              )}
             </div>
           );
         },
