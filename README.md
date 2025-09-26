@@ -13,7 +13,7 @@
 
 
 > [!NOTE]
-> This repo is for **Gate22**. If you're looking for the **Tool-calling Platform**, see [aci-mcp](https://github.com/aipotheosis-labs/aci).
+> This repo is for **Gate22**. If you're looking for the **Tool-calling Platform**, see [aci](https://github.com/aipotheosis-labs/aci).
 
 Govern which tools agents can use, what they can do, and how it’s audited—across agentic IDEs like Cursor, or other agents and AI tools.
 
