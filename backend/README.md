@@ -2,9 +2,6 @@
 
 [![Backend Checks](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/backend-checks.yml/badge.svg)](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/backend-checks.yml)
 [![Backend Deployment](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/backend-deployment.yml/badge.svg)](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/backend-deployment.yml)
-[![Build Image](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/ecs-build-image.yml/badge.svg)](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/ecs-build-image.yml)
-[![Database Migration](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/ecs-db-migration.yml/badge.svg)](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/ecs-db-migration.yml)
-[![Deploy Service](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/ecs-deploy-service.yml/badge.svg)](https://github.com/aipotheosis-labs/mcp-gateway/actions/workflows/ecs-deploy-service.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Overview
