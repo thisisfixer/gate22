@@ -46,7 +46,7 @@ Govern which tools agents can use, what they can do, and how it’s audited—ac
 - Admin-set credential modes: org-shared or per-user (admins may publish both variants through separate MCP configurations of the same MCP server).
 - User-created bundles (private for now) → one endpoint (remote MCP URL) per bundle and only accessible to the bundle creator.
 - MCP tool list refresh & diff view (see what changed for an MCP server before you use it).
-- MCP bundles condense
+- MCP bundles condense any number of MCPs and tools into just a single MCP endpoint and two functions--search and execute--to save context window.
 
 ## 💡 Why Use Gate22?
 
