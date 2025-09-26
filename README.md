@@ -18,7 +18,7 @@ Govern which tools agents can use, what they can do, and how it’s audited—ac
 
 **Gate22 is built for engineering organizations and teams** (Platform/Infra/DevEx, Security, Data/Analytics Eng). Admins onboard any remote MCP server (internal or external), set credential modes (org-shared or per-user), and define function-level allow lists per configuration. Developers then compose their own bundles from MCP configurations they’re permitted to use and expose them through a single unified MCP endpoint with just two functions — search and execute. Even if a bundle spans 20 MCPs/400+ tools, the unified endpoint discovers tools at call time, keeping IDE context lean while enforcing permissions.
 
-![Gate22 Architecture](frontend/public/gate22-architecture.svg)
+![Gate22 Architecture](frontend/public/gate22-architecture-light-bg.svg)
 
 <p align="center">
   Join us on <a href="https://discord.com/invite/UU2XAnfHJh">Discord</a> to help shape the future of AI governance.<br/><br/>
