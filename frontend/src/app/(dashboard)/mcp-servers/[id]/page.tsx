@@ -209,27 +209,57 @@ export default function MCPServerDetailPage() {
       <Separator className="mb-4" />
 
       {/* Categories */}
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold mb-3">Categories</h2>
-        <div className="flex flex-wrap gap-2">
-          {server.categories.map((category) => (
-            <Badge key={category} variant="secondary" className="text-sm">
-              {category}
-            </Badge>
-          ))}
-        </div>
-      </div>
-
-      <Separator className="mb-4" />
+      {server.categories.length > 0 && (
+        <>
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold mb-3">Categories</h2>
+            <div className="flex flex-wrap gap-2">
+              {server.categories.map((category) => (
+                <Badge key={category} variant="secondary" className="text-sm">
+                  {category}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <Separator className="mb-4" />
+        </>
+      )}
 
       {/* Operational Account - Only show for servers belonging to active organization */}
       {server.organization_id === activeOrg?.orgId && (
         <>
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                <h2 className="text-lg font-semibold">Operational Account</h2>
+            <div className="flex justify-between mb-3">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  <h2 className="text-lg font-semibold">Operational Account</h2>
+                </div>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    The operational account is exclusively used by the system
+                    for administrative purposes such as fetching MCP server
+                    metadata and monitoring server status. It will never be used
+                    by any users.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {hasOperationalAccount ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span className="text-sm text-muted-foreground">
+                        Operational account is configured
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 text-red-500" />
+                      <span className="text-sm text-muted-foreground">
+                        No operational account configured
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
               <PermissionGuard
                 permission={PERMISSIONS.CONNECTED_ACCOUNT_CREATE_OPERATIONAL}
@@ -243,29 +273,6 @@ export default function MCPServerDetailPage() {
                   {hasOperationalAccount ? "Update Account" : "Setup Account"}
                 </Button>
               </PermissionGuard>
-            </div>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Operational Account is a service account used for fetching MCP
-                server information and listening to any server changes.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 my-4">
-              {hasOperationalAccount ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-muted-foreground">
-                    Operational account is configured
-                  </span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-4 w-4 text-red-500" />
-                  <span className="text-sm text-muted-foreground">
-                    No operational account configured
-                  </span>
-                </>
-              )}
             </div>
           </div>
 
