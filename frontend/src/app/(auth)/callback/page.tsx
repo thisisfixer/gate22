@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 import { issueToken, getProfile } from "@/features/auth/api/auth";
 import { tokenManager } from "@/lib/token-manager";
+import { sanitizeRedirectPath } from "@/lib/safe-redirect";
+import {
+  storePendingInvitation,
+  getPendingInvitation,
+} from "@/features/invitations/utils/pending-invitation";
 
 // Error code mapping to user-friendly messages
 const ERROR_MESSAGES: Record<
@@ -27,6 +31,40 @@ function CallbackContent() {
   const [error, setError] = useState<string | null>(null);
   const [redirectPath, setRedirectPath] = useState<string>("/login");
   const [loadingMessage, setLoadingMessage] = useState("Completing sign in...");
+
+  const nextPath = useMemo(
+    () => sanitizeRedirectPath(searchParams.get("next")),
+    [searchParams],
+  );
+
+  // Extract invitation details from next parameter if it contains invitation URL
+  const invitationInfo = useMemo(() => {
+    if (!nextPath || !nextPath.includes("/invitations/accept")) {
+      return null;
+    }
+
+    try {
+      const url = new URL(nextPath, "http://localhost"); // Use dummy origin for parsing
+      const token = url.searchParams.get("token");
+      const invitationId = url.searchParams.get("invitation_id");
+      const organizationId = url.searchParams.get("organization_id");
+
+      if (token) {
+        return {
+          token,
+          invitationId,
+          organizationId,
+        };
+      }
+    } catch (error) {
+      console.error(
+        "Failed to parse invitation details from next path:",
+        error,
+      );
+    }
+
+    return null;
+  }, [nextPath]);
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
@@ -61,6 +99,15 @@ function CallbackContent() {
           setLoadingMessage("Completing Google sign in...");
         }
 
+        // Store invitation context if present before issuing token
+        if (invitationInfo) {
+          storePendingInvitation({
+            token: invitationInfo.token,
+            invitationId: invitationInfo.invitationId ?? null,
+            organizationId: invitationInfo.organizationId ?? null,
+          });
+        }
+
         // Wait a moment to ensure cookies are set
         await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -73,14 +120,45 @@ function CallbackContent() {
 
         const userProfile = await getProfile(token);
 
-        if (
-          !userProfile.organizations ||
-          userProfile.organizations.length === 0
-        ) {
-          router.push("/onboarding/organization");
-        } else {
-          router.push("/mcp-servers");
+        // Check for pending invitations first - either from URL or localStorage
+        const pendingInvitation = getPendingInvitation();
+        const hasInvitationContext = invitationInfo || pendingInvitation;
+
+        if (hasInvitationContext) {
+          // Redirect to invitation acceptance page if we have invitation context
+          const invitationToken =
+            invitationInfo?.token || pendingInvitation?.token;
+          const invitationId =
+            invitationInfo?.invitationId || pendingInvitation?.invitationId;
+          const organizationId =
+            invitationInfo?.organizationId || pendingInvitation?.organizationId;
+
+          if (invitationToken) {
+            const params = new URLSearchParams({ token: invitationToken });
+            if (invitationId) {
+              params.set("invitation_id", invitationId);
+            }
+            if (organizationId) {
+              params.set("organization_id", organizationId);
+            }
+            router.push(`/invitations/accept?${params.toString()}`);
+            return;
+          }
         }
+
+        // Use next path if provided (non-invitation URLs)
+        if (nextPath && !nextPath.includes("/invitations/accept")) {
+          router.push(nextPath);
+          return;
+        }
+
+        // Default fallback path
+        const fallbackPath =
+          userProfile.organizations && userProfile.organizations.length > 0
+            ? "/mcp-servers"
+            : "/onboarding/organization";
+
+        router.push(fallbackPath);
       } catch (error: unknown) {
         console.error("OAuth callback error:", error);
 
@@ -98,7 +176,7 @@ function CallbackContent() {
     };
 
     handleOAuthCallback();
-  }, [router, searchParams]);
+  }, [nextPath, router, searchParams, invitationInfo]);
 
   return (
     <div className="min-h-screen relative">

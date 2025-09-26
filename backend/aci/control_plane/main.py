@@ -24,8 +24,13 @@ from aci.control_plane.routes import (
     mcp_server_configurations,
     mcp_servers,
     mcp_tools,
-    organizations,
     users,
+)
+from aci.control_plane.routes.organization import (
+    invitations as organization_invitations,
+)
+from aci.control_plane.routes.organization import (
+    organizations,
 )
 
 if config.ENVIRONMENT == Environment.LOCAL:
@@ -108,6 +113,12 @@ app.include_router(
 
 app.include_router(
     organizations.router,
+    prefix=config.ROUTER_PREFIX_ORGANIZATIONS,
+    tags=[config.ROUTER_PREFIX_ORGANIZATIONS.split("/")[-1]],
+)
+
+app.include_router(
+    organization_invitations.router,
     prefix=config.ROUTER_PREFIX_ORGANIZATIONS,
     tags=[config.ROUTER_PREFIX_ORGANIZATIONS.split("/")[-1]],
 )

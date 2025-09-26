@@ -380,7 +380,7 @@ class TestEmailUserVerification:
     ) -> None:
         """Test that verification token can't be reused."""
         # Generate token and create verification record marked as used
-        token, verification = _create_verification_record(db_session, unverified_user, used=True)
+        token, _ = _create_verification_record(db_session, unverified_user, used=True)
 
         # Try to use the already-used token
         response = test_client.get(

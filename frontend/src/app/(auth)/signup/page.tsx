@@ -1,18 +1,45 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SignupForm } from "@/features/auth/components/signup-form";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { register, getGoogleAuthUrl } from "@/features/auth/api/auth";
 import { tokenManager } from "@/lib/token-manager";
+import { sanitizeRedirectPath } from "@/lib/safe-redirect";
+
+const VERIFY_PENDING_PATH = "/auth/verify-pending";
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={<SignupPageFallback />}>
+      <SignupPageContent />
+    </Suspense>
+  );
+}
+
+function SignupPageFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <span className="text-sm text-muted-foreground">
+        Preparing sign-up experience...
+      </span>
+    </div>
+  );
+}
+
+function SignupPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   // No inline verification message shown on this page
+
+  const nextPath = useMemo(
+    () => sanitizeRedirectPath(searchParams.get("next")),
+    [searchParams],
+  );
 
   const handleSignup = async (
     email: string,
@@ -24,6 +51,7 @@ export default function SignupPage() {
       name,
       email,
       password,
+      redirect_path: nextPath ?? undefined,
     });
 
     if (!success) {
@@ -34,7 +62,13 @@ export default function SignupPage() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("pendingEmail", email);
     }
-    router.push("/auth/verify-pending");
+
+    const verifyUrl =
+      nextPath && nextPath.length
+        ? `${VERIFY_PENDING_PATH}?next=${encodeURIComponent(nextPath)}`
+        : VERIFY_PENDING_PATH;
+
+    router.push(verifyUrl);
   };
 
   const handleGoogleSignup = () => {
@@ -46,7 +80,8 @@ export default function SignupPage() {
     // Redirect to the backend OAuth endpoint
     // The backend will handle the redirect to Google
     // Use callback page which will redirect to onboarding for new users
-    window.location.href = getGoogleAuthUrl();
+    const redirectPath = nextPath ?? undefined;
+    window.location.href = getGoogleAuthUrl(redirectPath);
   };
 
   return (
@@ -133,7 +168,14 @@ export default function SignupPage() {
               <span className="text-muted-foreground">
                 Already have an account?{" "}
               </span>
-              <Link href="/login" className="text-primary hover:underline">
+              <Link
+                href={
+                  nextPath
+                    ? `/login?next=${encodeURIComponent(nextPath)}`
+                    : "/login"
+                }
+                className="text-primary hover:underline"
+              >
                 Sign in
               </Link>
             </div>

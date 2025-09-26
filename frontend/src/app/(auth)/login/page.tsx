@@ -1,23 +1,50 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LoginForm } from "@/features/auth/components/login-form";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { login, issueToken, getGoogleAuthUrl } from "@/features/auth/api/auth";
 import { tokenManager } from "@/lib/token-manager";
+import { sanitizeRedirectPath } from "@/lib/safe-redirect";
+
+const DEFAULT_REDIRECT = "/mcp-servers";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6">
+      <span className="text-sm text-muted-foreground">
+        Preparing sign-in experience...
+      </span>
+    </div>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+
+  const nextPath = useMemo(
+    () => sanitizeRedirectPath(searchParams.get("next")),
+    [searchParams],
+  );
 
   const handleLogin = async (email: string, password: string) => {
     // Call the real login API (sets refresh token in cookie)
-    const success = await login(email, password);
+    const result = await login(email, password);
 
-    if (!success) {
+    if (!result.success) {
       return; // Error is already displayed as toast
     }
 
@@ -27,8 +54,10 @@ export default function LoginPage() {
     // Store token in memory using token manager
     tokenManager.setAccessToken(tokenResponse.token);
 
-    // Redirect to dashboard (MetaInfo provider will handle loading user profile)
-    router.push("/mcp-servers");
+    const backendRedirect = sanitizeRedirectPath(result.redirectTo);
+    const target = nextPath ?? backendRedirect ?? DEFAULT_REDIRECT;
+
+    router.push(target);
   };
 
   const handleGoogleLogin = () => {
@@ -39,7 +68,8 @@ export default function LoginPage() {
 
     // Redirect to the backend OAuth endpoint
     // The backend will handle the entire OAuth flow and redirect back to /callback
-    window.location.href = getGoogleAuthUrl();
+    const redirectPath = nextPath ?? undefined;
+    window.location.href = getGoogleAuthUrl(redirectPath);
   };
 
   return (
@@ -124,7 +154,14 @@ export default function LoginPage() {
               <span className="text-muted-foreground">
                 Don&apos;t have an account?{" "}
               </span>
-              <Link href="/signup" className="text-primary hover:underline">
+              <Link
+                href={
+                  nextPath
+                    ? `/signup?next=${encodeURIComponent(nextPath)}`
+                    : "/signup"
+                }
+                className="text-primary hover:underline"
+              >
                 Sign up
               </Link>
             </div>

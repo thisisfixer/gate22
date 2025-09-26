@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import {
   listOrganizationUsers,
   removeUser,
-  inviteToOrganization,
 } from "@/features/settings/api/organization";
 import { QUERY_KEYS } from "@/features/settings/constants";
 import { toast } from "sonner";
 import { OrganizationUser } from "@/features/settings/types/organization.types";
+import { useMemberInvitationMutation } from "@/features/members/hooks/use-member-invitation-mutation";
 
 export function useOrganizationMembers() {
   const { accessToken, activeOrg, user } = useMetaInfo();
@@ -17,10 +17,18 @@ export function useOrganizationMembers() {
 
   const membersQuery = useQuery({
     queryKey: QUERY_KEYS.MEMBERS(activeOrg?.orgId || ""),
-    queryFn: () => listOrganizationUsers(accessToken, activeOrg.orgId),
+    queryFn: async () => {
+      if (!accessToken || !activeOrg?.orgId) {
+        throw new Error("Organization context unavailable");
+      }
+
+      return listOrganizationUsers(accessToken, activeOrg.orgId);
+    },
     enabled: !!accessToken && !!activeOrg?.orgId,
-    staleTime: 30000, // Consider data stale after 30 seconds
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
 
   const removeMemberMutation = useMutation({
@@ -43,19 +51,8 @@ export function useOrganizationMembers() {
     },
   });
 
-  const inviteMemberMutation = useMutation({
-    mutationFn: ({ email, role }: { email: string; role: string }) =>
-      inviteToOrganization(accessToken, activeOrg.orgId, email, role),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.MEMBERS(activeOrg?.orgId || ""),
-      });
-      toast.success(`Invitation sent to ${variables.email}`);
-    },
-    onError: (error) => {
-      console.error("Failed to invite user:", error);
-      toast.error("Failed to send invitation. Please try again.");
-    },
+  const memberInvitationMutation = useMemberInvitationMutation({
+    invalidateMembers: true,
   });
 
   return {
@@ -66,8 +63,8 @@ export function useOrganizationMembers() {
     refetch: membersQuery.refetch,
     removeMember: removeMemberMutation.mutate,
     isRemoving: removeMemberMutation.isPending,
-    inviteMember: inviteMemberMutation.mutate,
-    isInviting: inviteMemberMutation.isPending,
-    inviteMemberAsync: inviteMemberMutation.mutateAsync,
+    createMemberInvitation: memberInvitationMutation.mutate,
+    isInviting: memberInvitationMutation.isPending,
+    createMemberInvitationAsync: memberInvitationMutation.mutateAsync,
   };
 }
