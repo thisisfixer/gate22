@@ -12,7 +12,7 @@
 </p>
 
 > [!NOTE]
-> This repo is for **Gate22**. If you're looking for the **Tool-calling Platform**, see [aci](https://github.com/aipotheosis-labs/aci).
+> This repo is for **Gate22**. If you're looking for the **Tool-calling Platform**, see [ACI](https://github.com/aipotheosis-labs/aci).
 
 Govern which tools agents can use, what they can do, and how it’s audited—across agentic IDEs like Cursor, or other agents and AI tools.
 
@@ -27,6 +27,13 @@ Govern which tools agents can use, what they can do, and how it’s audited—ac
     <img src="https://img.shields.io/github/stars/aipotheosis-labs/mcp-gateway?style=social" alt="GitHub Stars">
   </a>
 </p>
+
+## 💻 Getting Started: Local Development
+
+To run the full Gate22 platform (backend server and frontend portal) locally, follow the individual README files for each component:
+
+- **Backend:** [backend/README.md](backend/README.md)
+- **Frontend:** [frontend/README.md](frontend/README.md)
 
 ## 👥 Who Should Use This Now
 
@@ -67,13 +74,6 @@ An admin connects Notion, Supabase, and Render MCPs as read-only for everyone, a
 - **Documentation:** [aci.dev/docs](https://www.aci.dev/products/mcp-gateway)
 - **Blog:** [aci.dev/blog](https://www.aci.dev/blog)
 - **Community:** [Discord](https://discord.com/invite/UU2XAnfHJh) | [Twitter/X](https://x.com/AipoLabs) | [LinkedIn](https://www.linkedin.com/company/aci-dev-by-aipolabs/posts/?feedView=all)
-
-## 💻 Getting Started: Local Development
-
-To run the full {PLACEHOLDER: product name} platform (backend server and frontend portal) locally, follow the individual README files for each component:
-
-- **Backend:** [backend/README.md](backend/README.md)
-- **Frontend:** [frontend/README.md](frontend/README.md)
 
 ## 🗺️ Near-Term Roadmap
 
