@@ -70,7 +70,7 @@ An admin connects Notion, Supabase, and Render MCPs as read-only for everyone, a
 
 ## 🔗 Quick Links
 
-- **Cloud Version:** [gateway.aci.dev](https://gateway.aci.dev/)
+- **Cloud Version:** [gate22.aci.dev](https://gate22.aci.dev/)
 - **Documentation:** [aci.dev/docs](https://www.aci.dev/products/mcp-gateway)
 - **Blog:** [aci.dev/blog](https://www.aci.dev/blog)
 - **Community:** [Discord](https://discord.com/invite/UU2XAnfHJh) | [Twitter/X](https://x.com/AipoLabs) | [LinkedIn](https://www.linkedin.com/company/aci-dev-by-aipolabs/posts/?feedView=all)
