@@ -1,3 +1,4 @@
+import enum
 import re
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
@@ -14,10 +15,13 @@ from aci.common.enums import (
     MCPServerTransportType,
 )
 from aci.common.logging_setup import get_logger
+from aci.common.openai_client import get_openai_client
 from aci.common.schemas.mcp_auth import APIKeyConfig, AuthConfig, NoAuthConfig
 from aci.common.schemas.mcp_server import (
     CustomMCPServerCreateRequest,
+    MCPServerEmbeddingFields,
     MCPServerMetadata,
+    MCPServerPartialUpdateRequest,
     MCPServerPublic,
 )
 from aci.common.schemas.pagination import PaginationResponse
@@ -307,3 +311,238 @@ def test_refresh_mcp_server_tools(
 
     assert response.status_code == 200
     assert mock_mcp_tools_manager_instance.refresh_mcp_tools.call_count == 1
+
+
+MCPServerBelongsTo = enum.Enum("MCPServerBelongsTo", ["self", "another_org", "public"])
+
+
+@pytest.mark.parametrize(
+    "access_token_fixture",
+    [
+        "dummy_access_token_no_orgs",
+        "dummy_access_token_admin",
+        "dummy_access_token_member",
+        "dummy_access_token_admin_act_as_member",
+    ],
+)
+@pytest.mark.parametrize(
+    "mcp_server_belongs_to",
+    [MCPServerBelongsTo.self, MCPServerBelongsTo.another_org, MCPServerBelongsTo.public],
+)
+def test_delete_mcp_server(
+    test_client: TestClient,
+    db_session: Session,
+    request: pytest.FixtureRequest,
+    dummy_organization: Organization,
+    dummy_mcp_server: MCPServer,
+    access_token_fixture: str,
+    mcp_server_belongs_to: MCPServerBelongsTo,
+) -> None:
+    access_token = request.getfixturevalue(access_token_fixture)
+
+    dummy_random_organization = crud.organizations.create_organization(
+        db_session=db_session,
+        name="Dummy Other Organization",
+        description="Dummy Other Organization Description",
+    )
+
+    # Set up MCP server based on test parameters
+    if mcp_server_belongs_to == MCPServerBelongsTo.self:
+        dummy_mcp_server.organization_id = dummy_organization.id
+    elif mcp_server_belongs_to == MCPServerBelongsTo.another_org:
+        dummy_mcp_server.organization_id = dummy_random_organization.id
+    else:  # public MCP server
+        dummy_mcp_server.organization_id = None
+
+    db_session.commit()
+
+    response = test_client.delete(
+        f"{config.ROUTER_PREFIX_MCP_SERVERS}/{dummy_mcp_server.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    # Check access control first
+    if access_token_fixture == "dummy_access_token_no_orgs":
+        assert response.status_code == 403
+        return
+
+    # Check if trying to delete a MCP server that is not belongs to the organization
+    if (
+        mcp_server_belongs_to == MCPServerBelongsTo.public
+        or mcp_server_belongs_to == MCPServerBelongsTo.another_org
+    ):
+        assert response.status_code == 403
+        return
+
+    if access_token_fixture != "dummy_access_token_admin":
+        assert response.status_code == 403
+        return
+
+    assert response.status_code == 200
+
+    # Verify the MCP server was actually deleted from the database
+    deleted_mcp_server = crud.mcp_servers.get_mcp_server_by_id(
+        db_session, dummy_mcp_server.id, throw_error_if_not_found=False
+    )
+    assert deleted_mcp_server is None
+
+
+@pytest.mark.parametrize(
+    "access_token_fixture",
+    [
+        "dummy_access_token_no_orgs",
+        "dummy_access_token_admin",
+        "dummy_access_token_member",
+        "dummy_access_token_admin_act_as_member",
+    ],
+)
+@pytest.mark.parametrize(
+    "mcp_server_belongs_to",
+    [MCPServerBelongsTo.self, MCPServerBelongsTo.another_org, MCPServerBelongsTo.public],
+)
+@pytest.mark.parametrize(
+    "update_data,should_regen_embedding",
+    [
+        (
+            MCPServerPartialUpdateRequest(
+                description="Updated description",
+                logo="https://updated-logo.com/logo.png",
+                categories=["updated", "test"],
+            ),
+            True,
+        ),
+        (
+            MCPServerPartialUpdateRequest(
+                categories=["updated", "test"],
+                logo="https://updated-logo.com/logo.png",
+            ),
+            True,
+        ),
+        (
+            MCPServerPartialUpdateRequest(
+                description="Updated description",
+                logo="https://updated-logo.com/logo.png",
+            ),
+            True,
+        ),
+        (
+            MCPServerPartialUpdateRequest(
+                logo="https://updated-logo.com/logo.png",
+            ),
+            False,
+        ),
+        (
+            MCPServerPartialUpdateRequest(
+                description="",
+            ),
+            True,
+        ),
+        (
+            MCPServerPartialUpdateRequest(
+                categories=[],
+            ),
+            True,
+        ),
+        (MCPServerPartialUpdateRequest(), False),
+    ],
+)
+@patch("aci.common.embeddings.generate_mcp_server_embedding")
+def test_update_mcp_server(
+    mock_generate_embedding: AsyncMock,
+    test_client: TestClient,
+    db_session: Session,
+    request: pytest.FixtureRequest,
+    dummy_organization: Organization,
+    dummy_mcp_server: MCPServer,
+    access_token_fixture: str,
+    mcp_server_belongs_to: MCPServerBelongsTo,
+    update_data: MCPServerPartialUpdateRequest,
+    should_regen_embedding: bool,
+) -> None:
+    # Set up mock
+    mock_generate_embedding.return_value = [0.1] * 1024
+
+    access_token = request.getfixturevalue(access_token_fixture)
+
+    dummy_random_organization = crud.organizations.create_organization(
+        db_session=db_session,
+        name="Dummy Other Organization",
+        description="Dummy Other Organization Description",
+    )
+
+    # Set up MCP server based on test parameters
+    if mcp_server_belongs_to == MCPServerBelongsTo.self:
+        dummy_mcp_server.organization_id = dummy_organization.id
+    elif mcp_server_belongs_to == MCPServerBelongsTo.another_org:
+        dummy_mcp_server.organization_id = dummy_random_organization.id
+    else:  # public MCP server
+        dummy_mcp_server.organization_id = None
+
+    db_session.commit()
+
+    # Verify the MCP server was actually updated in the database
+    original_mcp_server = crud.mcp_servers.get_mcp_server_by_id(
+        db_session, dummy_mcp_server.id, throw_error_if_not_found=True
+    )
+    original_description = original_mcp_server.description
+    original_logo = original_mcp_server.logo
+    original_categories = original_mcp_server.categories
+
+    response = test_client.patch(
+        f"{config.ROUTER_PREFIX_MCP_SERVERS}/{dummy_mcp_server.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json=update_data.model_dump(exclude_unset=True),
+    )
+
+    # Check access control first
+    if access_token_fixture == "dummy_access_token_no_orgs":
+        assert response.status_code == 403
+        return
+
+    # Check if trying to update a MCP server that is not belongs to the organization
+    if (
+        mcp_server_belongs_to == MCPServerBelongsTo.public
+        or mcp_server_belongs_to == MCPServerBelongsTo.another_org
+    ):
+        assert response.status_code == 403
+        return
+
+    if access_token_fixture != "dummy_access_token_admin":
+        assert response.status_code == 403
+        return
+
+    assert response.status_code == 200
+
+    # Verify the response contains updated data
+    MCPServerPublic.model_validate(response.json())
+
+    # Verify the MCP server was actually updated in the database
+    db_mcp_server = crud.mcp_servers.get_mcp_server_by_id(
+        db_session, dummy_mcp_server.id, throw_error_if_not_found=True
+    )
+
+    expected_description = (
+        update_data.description if update_data.description is not None else original_description
+    )
+    expected_logo = update_data.logo if update_data.logo is not None else original_logo
+    expected_categories = (
+        update_data.categories if update_data.categories is not None else original_categories
+    )
+
+    assert db_mcp_server.description == expected_description
+    assert db_mcp_server.logo == expected_logo
+    assert db_mcp_server.categories == expected_categories
+
+    # Verify the embedding was regenerated if needed
+    if should_regen_embedding:
+        mock_generate_embedding.assert_called_once_with(
+            get_openai_client(),
+            MCPServerEmbeddingFields(
+                name=db_mcp_server.name,
+                url=db_mcp_server.url,
+                description=expected_description,
+                categories=expected_categories,
+            ),
+        )
+    else:
+        assert mock_generate_embedding.call_count == 0

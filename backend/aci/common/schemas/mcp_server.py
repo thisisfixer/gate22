@@ -17,6 +17,25 @@ class MCPServerMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class MCPServerPartialUpdateRequest(BaseModel):
+    """Used for API schema validation"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = Field(default=None)
+    logo: str | None = Field(default=None)
+    categories: list[str] | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def reject_explicit_none(self) -> "MCPServerPartialUpdateRequest":
+        non_nullable_fields = ["description", "logo", "categories"]
+
+        for field in non_nullable_fields:
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be set to null")
+        return self
+
+
 class MCPServerPartialUpdate(BaseModel):
     """
     Used for Partial Updating data to the database.

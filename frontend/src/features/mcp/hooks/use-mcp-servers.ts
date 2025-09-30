@@ -186,3 +186,57 @@ export function useMCPTool(toolName: string) {
     enabled: !!accessToken && !!toolName,
   });
 }
+
+// Hook to update an MCP server with permission check
+export function useUpdateMCPServer() {
+  const { accessToken, checkPermission } = useMetaInfo();
+  const queryClient = useQueryClient();
+
+  const canUpdate = checkPermission(PERMISSIONS.CUSTOM_MCP_SERVER_UPDATE);
+
+  return useMutation({
+    mutationFn: ({
+      serverId,
+      data,
+    }: {
+      serverId: string;
+      data: { description?: string; logo?: string };
+    }) => {
+      if (!canUpdate) {
+        throw new Error("You do not have permission to update MCP servers");
+      }
+      return mcpService.servers.update(accessToken!, serverId, data);
+    },
+    onSuccess: (updatedServer, { serverId }) => {
+      // Update the specific server in the cache
+      queryClient.setQueryData(mcpQueryKeys.servers.detail(serverId), updatedServer);
+      // Also invalidate the servers list to refresh it
+      queryClient.invalidateQueries({
+        queryKey: mcpQueryKeys.servers.all,
+      });
+    },
+  });
+}
+
+// Hook to delete an MCP server with permission check
+export function useDeleteMCPServer() {
+  const { accessToken, checkPermission } = useMetaInfo();
+  const queryClient = useQueryClient();
+
+  const canDelete = checkPermission(PERMISSIONS.CUSTOM_MCP_SERVER_DELETE);
+
+  return useMutation({
+    mutationFn: (serverId: string) => {
+      if (!canDelete) {
+        throw new Error("You do not have permission to delete MCP servers");
+      }
+      return mcpService.servers.delete(accessToken!, serverId);
+    },
+    onSuccess: () => {
+      // Invalidate servers list to refetch
+      queryClient.invalidateQueries({
+        queryKey: mcpQueryKeys.servers.all,
+      });
+    },
+  });
+}

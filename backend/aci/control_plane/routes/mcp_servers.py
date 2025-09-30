@@ -23,6 +23,8 @@ from aci.common.schemas.mcp_server import (
     MCPServerOAuth2DCRResponse,
     MCPServerOAuth2DiscoveryRequest,
     MCPServerOAuth2DiscoveryResponse,
+    MCPServerPartialUpdate,
+    MCPServerPartialUpdateRequest,
     MCPServerPublic,
     MCPServerUpsert,
 )
@@ -30,7 +32,12 @@ from aci.common.schemas.mcp_server_configuration import MCPServerConfigurationCr
 from aci.common.schemas.pagination import PaginationParams, PaginationResponse
 from aci.control_plane import access_control, config, schema_utils
 from aci.control_plane import dependencies as deps
-from aci.control_plane.exceptions import MCPToolsRefreshTooFrequent, OAuth2MetadataDiscoveryError
+from aci.control_plane.exceptions import (
+    MCPServerNotFoundError,
+    MCPToolsRefreshTooFrequent,
+    NotPermittedError,
+    OAuth2MetadataDiscoveryError,
+)
 from aci.control_plane.routes.connected_accounts import (
     CONNECTED_ACCOUNTS_OAUTH2_CALLBACK_ROUTE_NAME,
 )
@@ -213,6 +220,96 @@ async def create_custom_mcp_server(
 
     context.db_session.commit()
     return mcp_server_public
+
+
+@router.patch("/{mcp_server_id}", response_model=MCPServerPublic)
+async def update_mcp_server(
+    context: Annotated[deps.RequestContext, Depends(deps.get_request_context)],
+    mcp_server_id: UUID,
+    body: MCPServerPartialUpdateRequest,
+) -> MCPServerPublic:
+    mcp_server = crud.mcp_servers.get_mcp_server_by_id(
+        context.db_session, mcp_server_id, throw_error_if_not_found=False
+    )
+    if not mcp_server:
+        logger.error(f"MCP server {mcp_server_id} not found")
+        raise MCPServerNotFoundError("MCP server not found")
+
+    if mcp_server.organization_id is None:
+        logger.error(f"MCP server {mcp_server_id} is public")
+        raise NotPermittedError("MCP server is public")
+
+    # Enforce only admin to perform this action
+    access_control.check_act_as_organization_role(
+        context.act_as,
+        requested_organization_id=mcp_server.organization_id,
+        required_role=OrganizationRole.ADMIN,
+        throw_error_if_not_permitted=True,
+    )
+
+    # Re-embed if any fields that are set is part of embedding fields
+    # Note: we don't check if a field "is None" because user might want to explicitly set any
+    # fields to None
+    embedding_fields = set(MCPServerEmbeddingFields.model_fields.keys())
+    updated_embedding_fields = body.model_fields_set.intersection(embedding_fields)
+    if len(updated_embedding_fields) > 0:
+        # Load Embedding Fields with original mcp server data
+        mcp_server_data = MCPServerEmbeddingFields.model_validate(mcp_server, from_attributes=True)
+
+        # Replace fields that are set (instead of checking if a field is None)
+        for field in updated_embedding_fields:
+            setattr(mcp_server_data, field, getattr(body, field))
+
+        mcp_server_embedding = embeddings.generate_mcp_server_embedding(
+            get_openai_client(),
+            mcp_server_data,
+        )
+    else:
+        mcp_server_embedding = None
+
+    mcp_server = crud.mcp_servers.update_mcp_server(
+        context.db_session,
+        mcp_server,
+        # Here the `body` is validated by the `MCPServerPartialUpdateRequest` model, should not
+        # contain non-nullable fields set to None
+        MCPServerPartialUpdate.model_validate(body.model_dump(exclude_unset=True)),
+        mcp_server_embedding,
+    )
+
+    context.db_session.commit()
+    return schema_utils.construct_mcp_server_public(mcp_server)
+
+
+@router.delete("/{mcp_server_id}")
+async def delete_mcp_server(
+    context: Annotated[deps.RequestContext, Depends(deps.get_request_context)],
+    mcp_server_id: UUID,
+) -> None:
+    mcp_server = crud.mcp_servers.get_mcp_server_by_id(
+        context.db_session, mcp_server_id, throw_error_if_not_found=False
+    )
+    if not mcp_server:
+        logger.error(f"MCP server {mcp_server_id} not found")
+        raise MCPServerNotFoundError("MCP server not found")
+
+    if mcp_server.organization_id is None:
+        logger.error(f"MCP server {mcp_server_id} is public")
+        raise NotPermittedError("MCP server is public")
+
+    # Enforce only admin to perform this action
+    access_control.check_act_as_organization_role(
+        context.act_as,
+        requested_organization_id=mcp_server.organization_id,
+        required_role=OrganizationRole.ADMIN,
+        throw_error_if_not_permitted=True,
+    )
+
+    crud.mcp_servers.delete_mcp_server(context.db_session, mcp_server_id)
+
+    # TODO: Remove all Orphan records related to this MCP server
+    # (MCP server configurations, Connected Accounts, MCPServerBundle)
+
+    context.db_session.commit()
 
 
 @router.post(
