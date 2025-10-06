@@ -45,7 +45,7 @@ To run the full Gate22 platform (backend server and frontend portal) locally, fo
 
 ## 📺 Demo Video
 
-[ACI.dev **Gate22** Early Preview](https://youtu.be/aLzkuca7woQ)
+[ACI.dev **Gate22** Tutorial](https://youtu.be/iYNtp5TSAqw)
 
 ## ✨ Key Features in v0
 
