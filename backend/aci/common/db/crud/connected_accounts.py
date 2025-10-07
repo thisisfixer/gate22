@@ -212,11 +212,18 @@ def delete_connected_account(
     db_session.execute(statement)
 
 
-def delete_connected_accounts_by_mcp_server_configuration_id(
+def get_connected_accounts_by_mcp_server_id(
     db_session: Session,
-    mcp_server_configuration_id: UUID,
-) -> None:
-    statement = delete(ConnectedAccount).where(
-        ConnectedAccount.mcp_server_configuration_id == mcp_server_configuration_id
+    mcp_server_id: UUID,
+) -> list[ConnectedAccount]:
+    statement = (
+        select(ConnectedAccount)
+        .join(
+            MCPServerConfiguration,
+            ConnectedAccount.mcp_server_configuration_id == MCPServerConfiguration.id,
+        )
+        .where(
+            MCPServerConfiguration.mcp_server_id == mcp_server_id,
+        )
     )
-    db_session.execute(statement)
+    return list(db_session.execute(statement).scalars().all())
